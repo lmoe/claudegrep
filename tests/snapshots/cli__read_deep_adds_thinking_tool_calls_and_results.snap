@@ -1,0 +1,152 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"read\", \"aaaa1111\", \"--deep\"])"
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5
+
+---
+
+### #0 👤 User — 10:00
+
+How did we fix the token refresh?
+It fails after an hour.
+
+---
+
+### #1 🤖 Claude (claude-test) — 10:01
+
+<details>
+<summary>💭 Thinking</summary>
+
+The refresh token probably expires.
+
+</details>
+
+Let me look at the auth module.
+
+**🔧 Read**
+
+```json
+{
+  "file_path": "[ROOT]/work/app/src/auth.rs"
+}
+```
+
+<details>
+<summary>Result</summary>
+
+```
+fn refresh() {}
+```
+
+</details>
+
+**🔧 Bash**
+
+```json
+{
+  "command": "cd [ROOT]/work/app && cargo test auth 2>&1 | tail"
+}
+```
+
+<details>
+<summary>❌ Result (error)</summary>
+
+```
+test auth::refresh ... FAILED
+```
+
+</details>
+
+**🔧 Edit**
+
+```json
+{
+  "file_path": "[ROOT]/work/app/src/auth.rs",
+  "new_string": "b",
+  "old_string": "a"
+}
+```
+
+<details>
+<summary>Result</summary>
+
+```
+The file has been updated.
+```
+
+</details>
+
+**🔧 mcp__docs__lookup**
+
+```json
+{
+  "query": "oauth refresh"
+}
+```
+
+<details>
+<summary>Result</summary>
+
+```
+Refresh tokens rotate on every use.
+```
+
+</details>
+
+**🔧 Bash**
+
+```json
+{
+  "command": "claudegrep \"token refresh\""
+}
+```
+
+*(claudegrep output omitted: it repeats other sessions)*
+
+## Cause
+
+The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC.
+
+## Fix
+
+The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew.
+
+## Follow-up
+
+- add a regression test
+- log the measured skew
+
+---
+
+### #2 🛰 Agent (Explore) — 10:04
+
+Task: Find token refresh
+
+Tokens are refreshed in src/auth.rs by refresh(), which the HTTP middleware calls on every 401.
+
+---
+
+### #3 👤 User — 10:05
+
+> `/model opus`
+
+---
+
+### #4 👤 User — 10:06
+
+Here is the screenshot of the error.
+
+*[pasted image]* 📎 *spec.pdf*
+
+---
+
+### #5 🤖 Claude (claude-test) — 10:07
+
+The screenshot shows the expired token error, which the fix covers.
+
+---
+
+*Turns 0–5 of 0–5.* `--outline` lists all turns.

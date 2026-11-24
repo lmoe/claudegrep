@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: "project.reject(&[\"read\", \"aaaa1111\", \"--outline\", \"--deep\"])"
+---
+error: the argument '--outline' cannot be used with '--deep'
+
+Usage: claudegrep read --outline --db <FILE> <SESSION>
+
+For more information, try '--help'.

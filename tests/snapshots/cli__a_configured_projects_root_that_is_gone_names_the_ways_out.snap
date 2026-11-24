@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "fixture.run_in(&fixture.dir(\"app\"), &[\"list\"]).failure()"
+---
+claudegrep: the configured projects-root [ROOT]/projects does not exist. Name another with `claudegrep config projects-root DIR`, or go back to Claude Code's own with `claudegrep config projects-root --unset`.

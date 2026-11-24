@@ -1,0 +1,159 @@
+use anyhow::Result;
+use rusqlite::{Transaction, params};
+
+use crate::chunk::{self, Chunk};
+use crate::discover::FileStamp;
+use crate::transcript::Session;
+
+pub struct ArchiveRow {
+    pub path: String,
+    pub parent: Option<String>,
+    pub project_dir: String,
+    pub session_id: String,
+    pub meta: Option<String>,
+    pub stamp: FileStamp,
+    pub data: Vec<u8>,
+}
+
+pub struct SessionKey<'a> {
+    pub path: &'a str,
+    pub project_dir: &'a str,
+    pub session_id: &'a str,
+    pub archived: bool,
+}
+
+pub struct StoreTx<'a>(pub(super) Transaction<'a>);
+
+impl StoreTx<'_> {
+    pub fn archive(&self, row: &ArchiveRow) -> Result<()> {
+        self.0
+            .prepare_cached(
+                "INSERT OR REPLACE INTO archive (path, parent, project_dir, session_id, meta, size, mtime, data)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?
+            .execute(params![row.path, row.parent, row.project_dir, row.session_id, row.meta, row.stamp.size, row.stamp.mtime, row.data])?;
+        Ok(())
+    }
+
+    /// Replaces the session at `key.path` and its chunks. Without a `session` it is recorded as parsed and empty.
+    pub fn write_session(&self, key: &SessionKey<'_>, session: Option<&Session>, chunks: &[Chunk]) -> Result<()> {
+        self.0.execute("DELETE FROM sessions WHERE path = ?1", [key.path])?;
+        self.0.execute(
+            "INSERT INTO sessions (path, project_dir, session_id, parsed, archived, title, cwd, first_ts, last_ts, turns)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                key.path,
+                key.project_dir,
+                key.session_id,
+                chunk::VERSION,
+                key.archived,
+                session.map(|s| &s.meta.title),
+                session.and_then(|s| s.meta.cwd.as_ref()),
+                session.map(|s| s.meta.first),
+                session.map(|s| s.meta.last),
+                session.map_or(0, |s| s.turns.len()),
+            ],
+        )?;
+        let mut insert = self
+            .0
+            .prepare_cached("INSERT INTO chunks (path, turn, part, role, ts, text, hash, key) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")?;
+        for chunk in chunks {
+            insert.execute(params![
+                key.path,
+                chunk.turn,
+                chunk.part,
+                chunk.role,
+                chunk.timestamp,
+                chunk.text,
+                chunk.hash,
+                chunk.hash.fts_rowid()
+            ])?;
+        }
+        Ok(())
+    }
+
+    pub fn commit(self) -> Result<()> {
+        Ok(self.0.commit()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Filter;
+    use crate::test_support::lines::Transcript;
+    use crate::test_support::session;
+    use crate::test_support::store::TempStore;
+
+    const STAMP: FileStamp = FileStamp { size: 7, mtime: 1 };
+
+    fn row() -> ArchiveRow {
+        ArchiveRow {
+            path: "-p/s1.jsonl".to_owned(),
+            parent: None,
+            project_dir: "-p".to_owned(),
+            session_id: "s1".to_owned(),
+            meta: None,
+            stamp: STAMP,
+            data: b"old".to_vec(),
+        }
+    }
+
+    const KEY: SessionKey<'static> = SessionKey { path: "-p/s1.jsonl", project_dir: "-p", session_id: "s1", archived: false };
+
+    fn write(store: &mut TempStore, text: &str) {
+        let session = session::parse("s1", &Transcript::new("/p").user(text));
+        let tx = store.transaction().unwrap();
+        tx.write_session(&KEY, Some(&session), &chunk::chunks(&session)).unwrap();
+        tx.commit().unwrap();
+    }
+
+    fn texts(store: &TempStore) -> Vec<String> {
+        store.passages(KEY.path).unwrap().into_iter().map(|passage| passage.text).collect()
+    }
+
+    #[test]
+    fn nothing_is_written_until_the_commit() {
+        let mut store = TempStore::new();
+        let tx = store.transaction().unwrap();
+        tx.archive(&row()).unwrap();
+        drop(tx);
+        assert!(store.archived_files().unwrap().is_empty());
+
+        let tx = store.transaction().unwrap();
+        tx.archive(&row()).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(store.archived_files().unwrap()[KEY.path], STAMP);
+    }
+
+    #[test]
+    fn archiving_a_file_again_replaces_it() {
+        let mut store = TempStore::new();
+        let newer = FileStamp { size: 9, mtime: 2 };
+        let tx = store.transaction().unwrap();
+        tx.archive(&row()).unwrap();
+        tx.archive(&ArchiveRow { stamp: newer, data: b"new".to_vec(), ..row() }).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(store.archived_files().unwrap()[KEY.path], newer);
+        assert_eq!(store.load_archive(KEY.path).unwrap().main, b"new");
+    }
+
+    #[test]
+    fn writing_a_session_again_replaces_its_chunks() {
+        let mut store = TempStore::new();
+        write(&mut store, "first text");
+        write(&mut store, "second text");
+        assert_eq!(texts(&store), ["second text"]);
+        assert_eq!(store.stats(&Filter::default()).unwrap().sessions, 1);
+    }
+
+    #[test]
+    fn a_session_with_no_messages_is_parsed_but_not_listed() {
+        let mut store = TempStore::new();
+        let tx = store.transaction().unwrap();
+        tx.write_session(&KEY, None, &[]).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(store.parse_state().unwrap()[KEY.path].version, chunk::VERSION);
+        assert!(store.sessions(&Filter::default()).unwrap().is_empty());
+    }
+}

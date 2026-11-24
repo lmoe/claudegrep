@@ -1,0 +1,26 @@
+---
+source: tests/render.rs
+expression: "render::search(&view(directory(), \"release notes\", vec![notes_session()]))"
+---
+# Search: release notes
+
+*1 match in 1 session, `/home/dev/app`*
+
+## 1. Release notes 0.2
+
+`aaaa2222` · 2026-03-01 09:00 – 2026-03-02 17:45 · turns 0–1 · 1 match in turn 1 · *archived*
+
+**#1 🤖 Claude · 2026-03-01 09:01** · `claudegrep read aaaa2222 --from 1.0`
+
+> - token refresh is fixed
+
+---
+
+**Reading more**
+
+- `-B N`, `-A N`, `-C N` on this search: the N chunks before, after or around each match
+- `-n N` on this search: more matches, so more sessions (now 8)
+- `--since 2w`, `--until 2026-10-01`: only sessions active in that window
+- `claudegrep read <id> --from TURN.PART`: read on from a match, paged; each page ends with the `--from` that continues it
+- `claudegrep read <id> --outline`: one line per turn, to pick where to read
+- `--deep` on read: also tool calls, tool results and thinking

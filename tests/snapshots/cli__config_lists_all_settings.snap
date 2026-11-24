@@ -1,0 +1,13 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"config\"])"
+---
+# claudegrep config
+
+- `model` = `lightonai/LateOn-Code-edge` (default) — embedding model: a Hugging Face repo with an ONNX ColBERT export, or a local directory; changing it re-embeds everything
+- `limit` = `8` (default) — number of search results
+- `context` = `2` (default) — turns shown before and after `read --turn`
+- `budget` = `24000` (default) — page size of `read` in characters, 0 for no limit
+- `threads` = `1` — CPU threads for parsing and embedding; claudegrep also runs at the lowest scheduling priority
+- `device` = `cpu` — where documents are embedded: `gpu`, `cpu`, or `auto`, which uses a GPU when the machine has one and stores `gpu` once that worked
+- `projects-root` = `[ROOT]/projects` — Claude Code's projects directory

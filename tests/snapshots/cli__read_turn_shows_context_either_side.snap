@@ -1,0 +1,33 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"read\", \"aaaa1111\", \"--turn\", \"3\", \"--context\", \"1\"])"
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5
+
+---
+
+### #2 🛰 Agent (Explore) — 10:04
+
+Task: Find token refresh
+
+Tokens are refreshed in src/auth.rs by refresh(), which the HTTP middleware calls on every 401.
+
+---
+
+### #3 👤 User — 10:05
+
+> `/model opus`
+
+---
+
+### #4 👤 User — 10:06
+
+Here is the screenshot of the error.
+
+*[pasted image]* 📎 *spec.pdf*
+
+---
+
+*Turns 2–4 of 0–5.* Later: `claudegrep read aaaa1111 --from 5` Earlier: `claudegrep read aaaa1111 --turn 0 --context 1` `--deep` adds tool calls and thinking. `--outline` lists all turns.

@@ -1,0 +1,24 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"status\"])"
+---
+# claudegrep status
+
+## `[ROOT]/work/app`
+
+- sessions: 2
+- chunks: 8 (8 distinct)
+- embedded: 0 of 8 (0.0 MiB of vectors)
+
+## the whole index
+
+- sessions: 3
+- chunks: 10 (10 distinct)
+- embedded: 0 of 10 (0.0 MiB of vectors)
+
+## Setup
+
+- model: `lightonai/LateOn-Code-edge`
+- vectors from: `(nothing embedded yet)`
+- projects: `[ROOT]/projects`
+- database: `[ROOT]/db.sqlite`

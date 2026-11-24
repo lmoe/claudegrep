@@ -1,0 +1,9 @@
+---
+source: tests/render.rs
+expression: "render::list(&list(directory(), sessions(), current))"
+---
+# Sessions in `/home/dev/app`
+
+1. **Set up CI** — 2026-03-03 08:00 – 2026-03-03 08:30 · `bbbb3333` · 2 turns
+2. **Release notes 0.2** — 2026-03-01 09:00 – 2026-03-02 17:45 · `aaaa2222` · 1 turn · *archived*
+3. **Fix token refresh** — 2026-03-01 09:00 – 2026-03-02 17:45 · `aaaa1111` · 4 turns · *current session*

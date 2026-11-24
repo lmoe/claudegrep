@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "Project::new().reject(&[\"read\", \"aaaa1111\", \"--until\", \"2026-02-30\"])"
+---
+error: invalid value '2026-02-30' for '--until <WHEN>': expected a date (2026-10-14) or an age: 30m, 6h, 2d, 1w, 3mo
+
+For more information, try '--help'.

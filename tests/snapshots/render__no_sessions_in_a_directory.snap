@@ -1,0 +1,7 @@
+---
+source: tests/render.rs
+expression: "render::list(&list(directory(), Vec::new(), None))"
+---
+# Sessions in `/home/dev/app`
+
+*(no sessions started in `/home/dev/app`; `claudegrep --all list` covers every project)*

@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"forget\", \"aaaa2222\"])"
+---
+claudegrep: aaaa2222 still exists in Claude Code and would be re-indexed; delete it there first

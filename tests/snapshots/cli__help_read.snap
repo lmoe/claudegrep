@@ -1,0 +1,47 @@
+---
+source: tests/cli.rs
+expression: project.run(args)
+---
+Read a session as markdown. The default shows user messages, Claude's replies, subagent reports and one line per reply summarising its tool use (files edited, commands run). --deep adds tool calls, results and thinking. --outline prints one line per turn instead. Output is paged by --budget; the last line names the --from that continues where the page stopped.
+
+Usage: claudegrep read [OPTIONS] <SESSION>
+
+Arguments:
+  <SESSION>
+          Session id (a unique prefix is enough) or its number from `list`
+
+Options:
+      --outline
+          One line per turn instead of the content: the session's table of contents
+
+      --deep
+          Also show tool calls, tool results and thinking
+
+      --from <POSITION>
+          Start reading here: TURN.PART from search, or the position printed at the end of a page
+
+      --turn <N>
+          Show turn N with --context turns either side
+
+      --context <K>
+          Turns either side of --turn [config: context]
+
+      --budget <CHARS>
+          Page size in characters, 0 for no limit [config: budget]
+
+      --all
+          Use every project's sessions, not only those started in the current directory
+
+      --since <WHEN>
+          Only sessions active since WHEN: a date (2026-10-14) or an age (30m, 6h, 2d, 1w, 3mo)
+
+      --until <WHEN>
+          Only sessions active until WHEN: a date (whole day included) or an age
+
+      --db <FILE>
+          Database with the index, the transcript archive and the settings
+          
+          [env: CLAUDEGREP_DB=[ROOT]/db.sqlite]
+
+  -h, --help
+          Print help (see a summary with '-h')

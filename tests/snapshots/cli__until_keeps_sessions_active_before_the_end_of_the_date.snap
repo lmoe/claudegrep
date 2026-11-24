@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"list\", \"--until\", \"2026-01-01\"])"
+---
+# Sessions in `[ROOT]/work/app`
+
+1. **Fix token refresh** — 2026-01-01 10:00 – 2026-01-01 10:07 · `aaaa1111` · 6 turns

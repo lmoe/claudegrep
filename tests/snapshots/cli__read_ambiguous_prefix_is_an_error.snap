@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"read\", \"aaaa\"])"
+---
+claudegrep: aaaa matches 2 sessions: aaaa2222-0000-4000-8000-000000000002, aaaa1111-0000-4000-8000-000000000001

@@ -1,0 +1,41 @@
+---
+source: tests/cli.rs
+expression: "Project::new().embed(&[\"search\", \"-n\", \"1\", \"-B\", \"1\", \"-A\", \"0\",\n\"regression test for the skew\"])"
+---
+# Search: regression test for the skew
+
+*1 match in 1 session, `[ROOT]/work/app`*
+
+## 1. Fix token refresh
+
+`aaaa1111` · 2026-01-01 10:00 – 2026-01-01 10:07 · turns 0–5 · 1 match in turn 1
+
+**#1 🤖 Claude · 2026-01-01 10:01**
+
+> Let me look at the auth module.
+>
+> ## Cause
+>
+> The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC.
+
+**#1 🤖 Claude · 2026-01-01 10:01** · match · `claudegrep read aaaa1111 --from 1.1`
+
+> ## Fix
+>
+> The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew. The check now converts both sides to UTC before comparing and allows thirty seconds of skew.
+>
+> ## Follow-up
+>
+> - add a regression test
+> - log the measured skew
+
+---
+
+**Reading more**
+
+- `-B N`, `-A N`, `-C N` on this search: the N chunks before, after or around each match
+- `-n N` on this search: more matches, so more sessions (now 1)
+- `--since 2w`, `--until 2026-10-01`: only sessions active in that window
+- `claudegrep read <id> --from TURN.PART`: read on from a match, paged; each page ends with the `--from` that continues it
+- `claudegrep read <id> --outline`: one line per turn, to pick where to read
+- `--deep` on read: also tool calls, tool results and thinking

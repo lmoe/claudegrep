@@ -1,0 +1,33 @@
+---
+source: src/render/session.rs
+expression: page.text
+---
+
+---
+
+### #0 👤 User — 10:00
+
+Why does the token refresh fail?
+It fails after an hour.
+
+---
+
+### #1 🤖 Claude — 10:01
+
+Let me look.
+
+## Cause
+
+The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC. The clock skew check compared local time with UTC.
+
+## Fix
+
+Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now. Both sides are converted to UTC now.
+
+*🔧 read `src/auth.rs`*
+
+---
+
+### #2 👤 User — 2026-01-02 08:00
+
+> `/model opus`

@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"config\", \"colour\"])"
+---
+claudegrep: unknown setting colour; known: model, limit, context, budget, threads, device, projects-root

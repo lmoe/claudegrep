@@ -1,0 +1,10 @@
+---
+source: tests/cli.rs
+expression: "project.reject(&[\"read\", \"aaaa1111\", \"--context\", \"1\"])"
+---
+error: the following required arguments were not provided:
+  --turn <N>
+
+Usage: claudegrep read --turn <N> --context <K> --db <FILE> <SESSION>
+
+For more information, try '--help'.

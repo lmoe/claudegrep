@@ -1,0 +1,16 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"read\", \"aaaa1111\", \"--outline\"])"
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5
+
+- #0 👤 10:00 · How did we fix the token refresh? (57 chars)
+- #1 🤖 10:01 · 2 messages · 1265 chars · 5 tool calls → The refresh token expired because the clock skew check compared local time with UTC. The …
+- #2 🛰 10:04 · Find token refresh · 95 chars
+- #3 👤 10:05 · `/model opus`
+- #4 👤 10:06 · Here is the screenshot of the error.
+- #5 🤖 10:07 · 1 message · 67 chars · 0 tool calls → The screenshot shows the expired token error, which the fix covers.
+
+*Turns 0–5 of 0–5.* Read a turn: `claudegrep read aaaa1111 --from N`

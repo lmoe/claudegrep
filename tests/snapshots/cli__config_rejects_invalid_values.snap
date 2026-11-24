@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"config\", \"limit\", \"0\"])"
+---
+claudegrep: the limit must be a positive number

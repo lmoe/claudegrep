@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "fixture.run_in(&cwd, &[\"search\", \"token refresh\"]).failure()"
+---
+claudegrep: [ROOT]/home/.claude/projects does not exist, so there are no Claude Code sessions to read. If Claude Code keeps its projects somewhere else, name the directory with `claudegrep config projects-root DIR`.

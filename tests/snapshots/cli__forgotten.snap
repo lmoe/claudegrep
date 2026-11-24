@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "project.run(&[\"forget\", \"aaaa1111\"])"
+---
+Forgot Fix token refresh (aaaa1111).

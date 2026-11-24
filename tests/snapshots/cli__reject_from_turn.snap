@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: "project.reject(&[\"read\", \"aaaa1111\", \"--from\", \"1\", \"--turn\", \"1\"])"
+---
+error: the argument '--from <POSITION>' cannot be used with '--turn <N>'
+
+Usage: claudegrep read --from <POSITION> --db <FILE> <SESSION>
+
+For more information, try '--help'.

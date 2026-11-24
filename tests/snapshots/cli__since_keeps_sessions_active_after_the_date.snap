@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"list\", \"--since\", \"2026-01-02\"])"
+---
+# Sessions in `[ROOT]/work/app`
+
+1. **Release notes 0.2** — 2026-01-03 09:00 – 2026-01-03 09:01 · `aaaa2222` · 2 turns

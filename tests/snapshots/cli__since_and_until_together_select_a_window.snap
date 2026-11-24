@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"--all\", \"list\", \"--since\", \"2026-01-02\", \"--until\",\n\"2026-01-02\"])"
+---
+# Sessions in all projects
+
+1. **Set up CI** — 2026-01-02 15:00 – 2026-01-02 15:01 · `bbbb3333` · 2 turns · `[ROOT]/work/other`

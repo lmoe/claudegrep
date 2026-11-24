@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "project.fail(&[\"read\", \"bbbb3333\"])"
+---
+claudegrep: no session bbbb3333 in `[ROOT]/work/app`; see `claudegrep list`, or pass --all for other projects

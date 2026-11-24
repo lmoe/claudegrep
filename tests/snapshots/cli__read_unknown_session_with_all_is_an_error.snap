@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"--all\", \"read\", \"zzzz\"])"
+---
+claudegrep: no session zzzz; see `claudegrep --all list`

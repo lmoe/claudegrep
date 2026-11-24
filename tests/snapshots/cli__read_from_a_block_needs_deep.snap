@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"read\", \"aaaa1111\", \"--from\", \"1:2\"])"
+---
+claudegrep: 1:2 is a position in a --deep page; add --deep, or name a part as in 1.0

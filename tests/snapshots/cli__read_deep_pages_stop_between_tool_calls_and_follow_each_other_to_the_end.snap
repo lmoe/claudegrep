@@ -1,0 +1,48 @@
+---
+source: tests/cli.rs
+expression: first
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5
+
+---
+
+### #0 👤 User — 10:00
+
+How did we fix the token refresh?
+It fails after an hour.
+
+---
+
+### #1 🤖 Claude (claude-test) — 10:01
+
+<details>
+<summary>💭 Thinking</summary>
+
+The refresh token probably expires.
+
+</details>
+
+Let me look at the auth module.
+
+**🔧 Read**
+
+```json
+{
+  "file_path": "[ROOT]/work/app/src/auth.rs"
+}
+```
+
+<details>
+<summary>Result</summary>
+
+```
+fn refresh() {}
+```
+
+</details>
+
+---
+
+*Turns 0–1 of 0–5.* Continue: `claudegrep read aaaa1111 --from 1:3 --deep` (`--budget N` for a longer page) `--outline` lists all turns.

@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "Project::new().reject(&[\"list\", \"--since\", \"yesterday\"])"
+---
+error: invalid value 'yesterday' for '--since <WHEN>': expected a date (2026-10-14) or an age: 30m, 6h, 2d, 1w, 3mo
+
+For more information, try '--help'.

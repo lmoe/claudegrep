@@ -1,0 +1,5 @@
+---
+source: tests/cli.rs
+expression: "Project::new().fail(&[\"read\", \"aaaa1111\", \"--turn\", \"99\"])"
+---
+claudegrep: turn 99 does not exist, the session has turns 0–5

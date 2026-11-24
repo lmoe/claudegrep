@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "project.reject(&[\"search\", \"-n\", \"0\", \"x\"])"
+---
+error: invalid value '0' for '--limit <LIMIT>': expected a positive number
+
+For more information, try '--help'.

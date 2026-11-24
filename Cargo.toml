@@ -1,0 +1,76 @@
+[package]
+name = "claudegrep"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+description = "List, read and semantically search your Claude Code sessions"
+license = "LGPL-3.0-or-later"
+repository = "https://github.com/lmoe/claudegrep"
+exclude = ["claude-sessions/", ".test_sessions/"]
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+ignored_unit_patterns = "allow"
+similar_names = "allow"
+too_many_arguments = "allow"
+map_unwrap_or = "allow"
+manual_assert = "allow"
+struct_field_names = "allow"
+struct_excessive_bools = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+use_self = "warn"
+missing_const_for_fn = "warn"
+dbg_macro = "warn"
+
+[dependencies]
+anyhow = "1.0.102"
+blake3 = "1.8"
+chrono = "0.4.45"
+clap = { version = "4.6", features = ["derive", "env"] }
+dirs = "6"
+flate2 = "1"
+half = "2.7"
+hf-hub = { version = "0.4.3", default-features = false, features = ["ureq"] }
+indicatif = "0.17"
+ndarray = "0.16"
+next-plaid-onnx = "1.8.5"
+rayon = "1.12"
+rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+strum = { version = "0.28.0", features = ["derive"] }
+tempfile = "3.27.0"
+tree-sitter = "0.27.2"
+tree-sitter-bash = "0.25.1"
+ureq = "2"
+zip = { version = "9.7.3", default-features = false, features = [
+    "deflate-flate2",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+libloading = "0.9"
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+next-plaid-onnx = { version = "1.8.5", features = ["cuda"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+next-plaid-onnx = { version = "1.8.5", features = ["coreml"] }
+
+[profile.release]
+lto = "thin"
+
+[[test]]
+name = "render"
+harness = false
+
+[dev-dependencies]
+insta = "1.49.0"
+proptest = "1.12.0"

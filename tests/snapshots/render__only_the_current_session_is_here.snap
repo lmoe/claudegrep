@@ -1,0 +1,9 @@
+---
+source: tests/render.rs
+expression: "render::search(&view)"
+---
+# Search: nothing
+
+*0 matches in 0 sessions, `/home/dev/app`*
+
+*(the only session started here is the current one, which search skips; `claudegrep --all search` covers every project)*

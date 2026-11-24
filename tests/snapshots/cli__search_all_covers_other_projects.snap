@@ -1,0 +1,42 @@
+---
+source: tests/cli.rs
+expression: "Project::new().embed(&[\"--all\", \"search\", \"-n\", \"3\",\n\"continuous integration workflow\"])"
+---
+# Search: continuous integration workflow
+
+*3 matches in 2 sessions, all projects*
+
+## 1. Set up CI
+
+`bbbb3333` · 2026-01-02 15:00 – 2026-01-02 15:01 · turns 0–1 · 2 matches in turns 0, 1 · `[ROOT]/work/other`
+
+**#0 👤 User · 2026-01-02 15:00** · `claudegrep --all read bbbb3333 --from 0.0`
+
+> Set up CI for this project
+
+**#1 🤖 Claude · 2026-01-02 15:01** · `claudegrep --all read bbbb3333 --from 1.0`
+
+> Added a GitHub Actions workflow that runs cargo test on every push.
+
+## 2. Fix token refresh
+
+`aaaa1111` · 2026-01-01 10:00 – 2026-01-01 10:07 · turns 0–5 · 1 match in turn 1 · `[ROOT]/work/app`
+
+**#1 🤖 Claude · 2026-01-01 10:01** · `claudegrep --all read aaaa1111 --from 1.0`
+
+> Let me look at the auth module.
+>
+> ## Cause
+>
+> The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC. The refresh token expired because the clock skew check compared local time with UTC.
+
+---
+
+**Reading more**
+
+- `-B N`, `-A N`, `-C N` on this search: the N chunks before, after or around each match
+- `-n N` on this search: more matches, so more sessions (now 3)
+- `--since 2w`, `--until 2026-10-01`: only sessions active in that window
+- `claudegrep --all read <id> --from TURN.PART`: read on from a match, paged; each page ends with the `--from` that continues it
+- `claudegrep --all read <id> --outline`: one line per turn, to pick where to read
+- `--deep` on read: also tool calls, tool results and thinking

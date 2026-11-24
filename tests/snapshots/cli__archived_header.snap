@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: "read.lines().take(3).collect::<Vec<_>>().join(\"\\n\")"
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5 · **Archived:** Claude Code has deleted the transcript, this is claudegrep's copy

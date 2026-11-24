@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: "project.reject(&[\"config\", \"limit\", \"5\", \"--unset\"])"
+---
+error: the argument '[VALUE]' cannot be used with '--unset'
+
+Usage: claudegrep config --db <FILE> <KEY> <VALUE>
+
+For more information, try '--help'.

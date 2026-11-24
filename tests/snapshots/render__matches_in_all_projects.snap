@@ -1,0 +1,53 @@
+---
+source: tests/render.rs
+expression: "render::search(&view(Scope::All, \"token refresh\",\nvec![token_session(), notes_session()]))"
+---
+# Search: token refresh
+
+*3 matches in 2 sessions, all projects*
+
+## 1. Fix token refresh
+
+`aaaa1111` · 2026-03-01 09:00 – 2026-03-02 17:45 · turns 0–3 · 2 matches in turns 1, 2 · `/home/dev/app`
+
+**#0 👤 User · 2026-03-01 09:00**
+
+> Why does the token refresh fail after an hour?
+
+**#1 🤖 Claude · 2026-03-01 09:01** · match · `claudegrep --all read aaaa1111 --from 1.0`
+
+> The clock skew check compared local time with UTC.
+>
+> So tokens looked expired early.
+
+**#1 🤖 Claude · 2026-03-01 09:01**
+
+> ## Fix
+>
+> - convert both sides to UTC
+> - allow 30 s of skew
+
+**#2 🛰 Agent · 2026-03-01 09:02** · `claudegrep --all read aaaa1111 --from 2.0` · also in 2 other places
+
+> Task: Find token refresh
+>
+> Tokens are refreshed in src/auth.rs.
+
+## 2. Release notes 0.2
+
+`aaaa2222` · 2026-03-01 09:00 – 2026-03-02 17:45 · turns 0–1 · 1 match in turn 1 · `/home/dev/app` · *archived*
+
+**#1 🤖 Claude · 2026-03-01 09:01** · `claudegrep --all read aaaa2222 --from 1.0`
+
+> - token refresh is fixed
+
+---
+
+**Reading more**
+
+- `-B N`, `-A N`, `-C N` on this search: the N chunks before, after or around each match
+- `-n N` on this search: more matches, so more sessions (now 8)
+- `--since 2w`, `--until 2026-10-01`: only sessions active in that window
+- `claudegrep --all read <id> --from TURN.PART`: read on from a match, paged; each page ends with the `--from` that continues it
+- `claudegrep --all read <id> --outline`: one line per turn, to pick where to read
+- `--deep` on read: also tool calls, tool results and thinking

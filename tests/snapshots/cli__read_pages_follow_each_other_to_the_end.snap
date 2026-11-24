@@ -1,0 +1,18 @@
+---
+source: tests/cli.rs
+expression: first
+---
+# Fix token refresh
+
+**Date:** 2026-01-01 10:00 – 2026-01-01 10:07 · **Project:** `[ROOT]/work/app` · **Session:** `aaaa1111-0000-4000-8000-000000000001` · **Turns:** 0–5
+
+---
+
+### #0 👤 User — 10:00
+
+How did we fix the token refresh?
+It fails after an hour.
+
+---
+
+*Turns 0–0 of 0–5.* Continue: `claudegrep read aaaa1111 --from 1.0` (`--budget N` for a longer page) `--deep` adds tool calls and thinking. `--outline` lists all turns.

@@ -1,0 +1,9 @@
+---
+source: tests/render.rs
+expression: "render::search(&view(Scope::All, \"nothing\", Vec::new()))"
+---
+# Search: nothing
+
+*0 matches in 0 sessions, all projects*
+
+*(none)*

@@ -1,0 +1,461 @@
+---
+source: src/transcript/tests.rs
+expression: "with_reports(main, report.into_iter().collect())"
+---
+Session {
+    id: "fixture",
+    meta: SessionMeta {
+        title: "ADIPISCING ut quis anim amet officia",
+        cwd: Some(
+            "/id/amet/Fugiat/adipiscing-ut",
+        ),
+        first: "2026-09-17T13:11:28.619Z",
+        last: "2026-09-17T13:23:16.423Z",
+    },
+    turns: [
+        User(
+            UserTurn {
+                timestamp: "2026-09-17T13:11:34.738Z",
+                text: "",
+                images: 0,
+                documents: [],
+                command: Some(
+                    SlashCommand {
+                        name: "/labore",
+                        args: "",
+                    },
+                ),
+            },
+        ),
+        User(
+            UserTurn {
+                timestamp: "2026-09-17T13:19:31.089Z",
+                text: "",
+                images: 0,
+                documents: [],
+                command: Some(
+                    SlashCommand {
+                        name: "/labore",
+                        args: "",
+                    },
+                ),
+            },
+        ),
+        User(
+            UserTurn {
+                timestamp: "2026-09-17T13:19:37.016Z",
+                text: "Ullamco labore-tempor/adipiscing-ut/2026-09-14_Exercitation velit ipsum amet officia ad/laboris.mollit\nmollit cupidatat sunt reprehenderit ex nostrud elit laborum.\n\nLaboris mollit id labore sint anim ex, aute sit sit sunt exercitation mollit dolor amet Laboris occaecat consequat, Aliqua, tempor\nad",
+                images: 0,
+                documents: [],
+                command: None,
+            },
+        ),
+        Assistant(
+            AssistantTurn {
+                timestamp: "2026-09-17T13:19:41.491Z",
+                model: Some(
+                    "claude-fable-5-1",
+                ),
+                blocks: [
+                    Tool(
+                        ToolCall {
+                            name: "ToolSearch",
+                            input: Object {
+                                "max_results": Number(10),
+                                "query": String("velit:adipiscing__tempor__tempor_velit,adipiscing__commodo__esse_ad,adipiscing__commodo__magna,adipiscing__commodo__ullamco_laboris"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "[tool reference: adipiscing__tempor__tempor_velit]\n[tool reference: adipiscing__commodo__esse_ad]\n[tool reference: adipiscing__commodo__magna]\n[tool reference: adipiscing__commodo__ullamco_laboris]",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("reprehenderit -exercitation /id/amet/Fugiat/adipiscing-ut/labore-tempor 2>/amet/elit; dolor / -ea 6 -dolor exercitation -do \"2026-09-14_Exercitation velit*\" 2>/amet/elit | quis"),
+                                "description": String("Ut ea laboris non"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "/id/amet/Fugiat/adipiscing-ut/labore-tempor",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "adipiscing__tempor__tempor_velit",
+                            input: Object {},
+                            result: Some(
+                                ToolResult {
+                                    text: "<serena>\nConsequat pariatur proident fugiat mollit laboris consequat sit labore commodo. Aliquip velit-nulla: ex'nostrud ullamco aliquip\naliquip laborum ea laborum nisi'nostrud do.\n\nSunt nostrud incididunt reprehenderit sint incididunt ullamco ex ea dolore; mollit do deserunt sint minim excepteur",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("reprehenderit -labore \"/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/\" | mollit -30; reprehenderit -labore \"/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/2026-09-14_Exercitation velit ipsum amet officia ad/\"; aliqua -magna \"/id/amet/Fugiat/adipiscing-ut/magna"),
+                                "description": String("Laborum consectetur voluptate amet laboris nulla"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "deserunt-consectetur-lorem   2 exercitation exercitation  4096 16. Occaecat 16:19 2026-09-15_Officia amet Aute qui quis_4enim65\ndeserunt-consectetur-lorem   2 exercitation exercitation  4096 15. Occaecat 23:18 2026-09-15_Officia amet Aute qui quis_8532consequat\ndeserunt-consectetur-lorem   2 exercitation exercitation",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/2026-09-14_Exercitation velit ipsum amet officia ad/laboris.mollit"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1\t# Exercitation velit ipsum amet officia ad\n2\t\n3\t**Esse:** 2026-09-14 22:51 · **Dolor:** `/id/amet/Fugiat/adipiscing-ut` · **Consectetur:** `7339373exercitation-quis4sint4-440fugiat-nostrud78-3fugiat71velit8fugiat60veniam` · **Laboris:** anim\n4\t\n5\t---\n6\t\n7\t### 👤 Amet — 22:53\n8\t\n9\tExercitation ad'qui",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "adipiscing__commodo__esse_ad",
+                            input: Object {
+                                "rank_freshness": Bool(true),
+                                "requests": Array [
+                                    Object {
+                                        "query": String("quis ex mollit commodo id amet adipiscing"),
+                                    },
+                                    Object {
+                                        "query": String("enim sint ipsum irure consectetur"),
+                                    },
+                                    Object {
+                                        "query": String("dolor sint aute laborum est non"),
+                                    },
+                                    Object {
+                                        "query": String("quis anim enim lorem cupidatat sed"),
+                                    },
+                                ],
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "Aliqua `occaecat` · laboris 1 ex 2 · proident 2026-09-17Nostrud13:49Exercitation\nNisi: quis ex mollit commodo id amet adipiscing → laboris 1; enim sint ipsum irure consectetur → laboris 1; dolor sint aute laborum est non → duis",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/2026-09-14_Exercitation velit ipsum amet officia ad/laboris.mollit"),
+                                "limit": Number(650),
+                                "offset": Number(658),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "658\t- **consectetur amet aute:** est.\n659\t- **magna:** 1 cillum sed, ea labore ea ipsum excepteur.\n660\t- **commodo:** in aliqua, exercitation in ea do ipsum.\n661\t- **amet:** sit ipsum, laborum sunt.\n662\t- **elit",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "adipiscing__commodo__ullamco_laboris",
+                            input: Object {
+                                "page": Number(2),
+                                "result_id": String("occaecat"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "Aliqua `occaecat` · laboris 2 ex 2 · proident 2026-09-17Nostrud13:49Exercitation\nNisi: quis ex mollit commodo id amet adipiscing → laboris 1; enim sint ipsum irure consectetur → laboris 1; dolor sint aute laborum est non → duis",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/2026-09-14_Exercitation velit ipsum amet officia ad/laboris.mollit"),
+                                "limit": Number(650),
+                                "offset": Number(1307),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1307\tAliquip, nisi ea exercitation: ea 25-deserunt excepteur voluptate cupidatat laboris do incididunt (`aute/excepteur.ut:56`, `officia/excepteur.ut:41`) ea `_irure/lorem.ut` est elit laboris elit cillum et ea lorem ex; `ea` amet `aliqua",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Text(
+                        "Ullamco ea reprehenderit laboris (adipiscing Id'qui laborum qui). Ipsum culpa ea sit, ipsum et, magna et commodo `67fugiat53748` amet ea aliquip consequat dolor cillum Laboris deserunt officia mollit.",
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("reprehenderit -labore .aliquip/quis/ && aliqua -aliquip .aliquip/quis/*.mollit && magna et --fugiat 67fugiat53748..QUIS | aliqua -aliquip && magna magna --consectetur 67fugiat53748..QUIS && magna sunt --dolor | quis -20"),
+                                "description": String("Laborum quis ullamco, voluptate aliquip amet nisi dolor"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "deserunt 224\ndeserunt-consectetur-lorem 3 exercitation exercitation  4096 16. Occaecat 16:25 .\ndeserunt-consectetur-lorem 6 exercitation exercitation  4096 15. Occaecat 01:42 ..\n-anim-et--et-- 1 exercitation exercitation 11624 15. Occaecat 21:58 reprehenderit.voluptate.mollit\n-anim-et--et-- 1 exercitation exercitation 54249 15. Occaecat 10:38 exercitation-deserunt.excepteur\n-anim-et--et-- 1 ",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("reprehenderit \"labore-tempor/adipiscing-ut/2026-09-16_Quis anim amet ipsum officia/\" && aliqua -magna \"labore-tempor/adipiscing-ut/2026-09-16_Quis anim amet ipsum officia/\"* && magna et --ea='%officia %esse %qui' --esse=ea:'%cupidatat-%exercitation %Officia"),
+                                "description": String("Tempor Id anim consectetur et amet ea anim laborum"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "laboris.mollit\n20271 labore-tempor/adipiscing-ut/2026-09-16_Quis anim amet ipsum officia/laboris.mollit\n803magna5occaecat 09-17 15:10 Ipsum\n215exercitation5esse6 09-16 12:13 Ex ea in-culpa VOLUPTATE dolore minim fugiat sint aute'qui laborum cupidatat est, non",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/labore-tempor/adipiscing-ut/2026-09-16_Quis anim amet ipsum officia/laboris.mollit"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1\t# Quis anim amet ipsum officia\n2\t\n3\t**Esse:** 2026-09-16 16:19 · **Dolor:** `/id/amet/Fugiat/adipiscing-ut` · **Consectetur:** `sint8303enim-5exercitation7fugiat-48qui-892magna-4865reprehenderit4in42exercitation7` · **Laboris:** anim\n4\t\n5\t---\n6\t\n7\t### 👤 Amet — 16:21\n8\t\n9\t> `/cupidatat",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/.aliquip/quis/QUIS.mollit"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1\t# Quis\n2\t\n3\t`ex tempor` elit anim enim nisi occaecat consequat amet culpa ex labore aliquip, pariatur-mollit, nulla amet laborum enim. Nisi reprehenderit magna ea quis sit (nisi sunt) amet occaecat velit cillum, ullamco sunt",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("reprehenderit -labore /laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/sint8303enim-5exercitation7fugiat-48qui-892magna-4865reprehenderit4in42exercitation7/ 2>/amet/elit && reprehenderit -labore /laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/sint8303enim-5exercitation7fugiat-48qui-892magna-4865reprehenderit4in42exercitation7/*/ 2>/amet/elit | quis -40"),
+                                "description": String("Commodo et officia id nisi ea non anim consectetur"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "In mollit 2",
+                                    is_error: true,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("nulla in/enim.aliqua aute 2>&1 | mollit -5; deserunt -culpa 1,60duis .aliquip/quis/enim/QUIS.mollit"),
+                                "description": String("Ut enim amet ullamco ea fugiat-ea nostrud"),
+                                "timeout": Number(180000),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "73 enim sit 7 adipiscing do mollit .aliquip/quis/enim\naute: Aliquip 32 · Cupidatat 22 · Laborum 13 · ALIQUA 4\n# Enim\n\nIpsum exercitation `nulla in/enim.aliqua` magna 803magna5occaecat. Ullamco sunt fugiat ea, enim ullamco exercitation sunt amet aliquip",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/.aliquip/quis/ipsum.mollit"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1\t# Quis ipsum\n2\t\n3\tUllamco in fugiat ex, sit ea cupidatat ea tempor aliqua. Sint ex ut officia in cillum ad lorem lorem mollit amet elit ad fugiat ad mollit. Ea velit enim aliquip sit `enim/`. Nisi sunt duis ea dolor, lorem sint duis",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/.aliquip/quis/ipsum.mollit"),
+                                "limit": Number(170),
+                                "offset": Number(278),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "278\t  - Consectetur dolor mollit ad incididunt `ut`, `do` amet `laborum`: occaecat `Labore2Occaecat` esse labore `Labore2Non`, proident ea esse sint.\n279\t  - Sint elit sit sunt aliquip do est qui sint sit nulla (",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("(nulla in/tempor.aliqua > \"/laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/ea/tempor.et\" 2>&1; magna \"tempor in $?\" >> \"/laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8"),
+                                "description": String("Labore occaecat consequat, commodo ea reprehenderit irure voluptate, officia consectetur"),
+                                "run_in_background": Bool(true),
+                                "timeout": Number(600000),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "Magna id sit aliquip proident UT: irure6. Officia cupidatat ea do mollit: /laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/nostrud/irure6.officia. Consequat aliquip esse quis fugiat ad elit. Mollit tempor minim",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("deserunt /id/amet/Fugiat/adipiscing-ut/aute/laborum/officia && et exercitation sit qui/*/ ; tempor magna \"== $exercitation\"; dolor \"$exercitation\" -ea 1 -do '*.ut' -consequat -do '*.irure.ut' | do | officia aliqua -aliquip | deserunt 'qui|qui/[^/]*/||' | sunt '{minim \"%qui %qui, \", $1, "),
+                                "description": String("Deserunt dolor fugiat enim sunt et sint duis officia"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "== qui/consectetur/\n66 ea.ut, 19 tempor.ut, 156 enim.ut, 67 adipiscing.ut, 1 nostrud.ut, 102 nulla.ut, 129 deserunt.ut, 37 eiusmod.ut, 51 id.ut, 11 veniam.ut, 7 id.ut, 646 deserunt, \n== qui/aute/\n238 ea.ut, 22 aliquip",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Thinking(
+                        "73 enim eiusmod, sunt sit `adipiscing`, non ea aliquip pariatur tempor irure—Laboris'labore mollit commodo `ex tempor` amet `ex irure` sit ea aliquip non Laboris anim ea enim duis amet `_irure` cillum ut officia nostrud mollit.\n\n",
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Read",
+                            input: Object {
+                                "file_path": String("/id/amet/Fugiat/adipiscing-ut/aute/laborum/officia/qui/magna.ut"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "1\tlaboris dolor { exercitation } nisi 'laboris';\n2\tlaboris dolor { Aliquip } nisi './_irure/ullamco-pariatur';\n3\tlaboris dolor { Est, Eiusmod, Tempor } nisi '@commodo/in';\n4\tlaboris dolor { Qui } nisi '../enim",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Bash",
+                            input: Object {
+                                "command": String("deserunt /id/amet/Fugiat/adipiscing-ut/aute/laborum/officia/qui/_irure && et quis sit ullamco-pariatur.ut est-ea.ut est-voluptate.ut est-voluptate-enim.ut enim-dolor.ut lorem.ut laboris-laborum.ut et-quis.ut; tempor magna \"======"),
+                                "description": String("Officia ea cupidatat irure enim aute"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "=================== ullamco-pariatur.ut\n     1\tlaboris { reprehenderit } nisi '@commodo/in';\n     2\tlaboris { amet, consectetur, laboris, dolor Id, dolor QUI } nisi 'irure-aliqua';\n     3\tlaboris { exercitation } nisi 'laboris';\n     4\tlaboris { laboris, anim",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Write",
+                            input: Object {
+                                "content": String("# Anim nisi (ullamco nostrud cillum irure occaecat)\n\nAd: `/id/amet/Fugiat/adipiscing-ut` (ex do, commodo). Elit `LABORE.mollit` amet `aute/laborum/LABORE.mollit` reprehenderit ea aliqua amet ea mollit commodo. Ullamco consectetur.\n\n## Lorem quis"),
+                                "file_path": String("/laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/ea/anim/NISI.mollit"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "Sunt aute qui magna: /laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/ea/anim/NISI.mollit (sunt dolor cupidatat cillum sit nostrud officia — consequat do mollit Ullamco ad ullamco)",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                    Tool(
+                        ToolCall {
+                            name: "Agent",
+                            input: Object {
+                                "description": String("Anim est enim"),
+                                "model": String("fable"),
+                                "prompt": String("Consequat pariatur ullamco ex cillum ullamco-deserunt mollit sunt. Aliquip ullamco `/laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/ea/anim/NISI.mollit` sit reprehenderit amet anim ad laboris.\n\nNostrud nostrud do: `est`. Duis: `/"),
+                                "subagent_type": String("laboris-incididunt"),
+                            },
+                            result: Some(
+                                ToolResult {
+                                    text: "Sint exercitation velit qui. (Nisi id aliqua cupidatat dolore exercitation — est officia aliquip id lorem ullamco ex ad, adipiscing ea adipiscing consequat, aliqua sint amet-commodo culpa.)\nadipiscing: sint06sint8reprehenderit1sint1431fugiat4928 (dolore UT - tempor consequat velit mollit amet. Eiusmod Qui",
+                                    is_error: false,
+                                    images: 0,
+                                },
+                            ),
+                        },
+                    ),
+                ],
+            },
+        ),
+        Agent(
+            AgentTurn {
+                timestamp: "2026-09-17T13:37:10.142Z",
+                description: "Anim commodo consectetur aute qui",
+                agent_type: Some(
+                    "general-purpose",
+                ),
+                text: "Ea anim cupidatat cillum, amet ea reprehenderit ad cupidatat magna `/laboris/labore-1000/-id-amet-Fugiat-adipiscing-ut/2quis3reprehenderit131fugiat-1reprehenderit15-4reprehenderit01-sint540-9magna9quis8deserunt17consequat/ea/anim/commodo-consectetur-aute.mollit`.\n\n- **Commodo:** est anim magna `67fugiat53748`. Ea 758-deserunt ex",
+            },
+        ),
+    ],
+}

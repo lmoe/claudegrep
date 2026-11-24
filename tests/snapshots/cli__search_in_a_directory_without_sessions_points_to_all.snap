@@ -1,0 +1,9 @@
+---
+source: tests/cli.rs
+expression: "project.fixture.run_with_model(&empty, &[\"search\", \"anything\"], &[]).success()"
+---
+# Search: anything
+
+*0 matches in 0 sessions, `[ROOT]/work/empty`*
+
+*(no sessions started in `[ROOT]/work/empty` under `[ROOT]/projects`, the configured projects-root; `claudegrep --all search` covers every project there, and `claudegrep config projects-root --unset` goes back to Claude Code's own)*

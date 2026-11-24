@@ -1,0 +1,7 @@
+---
+source: tests/render.rs
+expression: "render::list(&list(Scope::All, Vec::new(), None))"
+---
+# Sessions in all projects
+
+*(none)*

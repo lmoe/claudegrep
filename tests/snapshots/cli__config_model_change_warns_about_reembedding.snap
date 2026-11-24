@@ -1,0 +1,6 @@
+---
+source: tests/cli.rs
+expression: "Project::new().run(&[\"config\", \"model\", \"some/model\"])"
+---
+model = some/model
+The next search or `claudegrep index` embeds every chunk with this model.

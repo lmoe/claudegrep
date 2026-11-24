@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  draft:
+    name: Draft the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag is the version in Cargo.toml
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, Cargo.toml has version $version"
+            exit 1
+          fi
+
+      - name: Create the draft
+        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: draft
+    strategy:
+      matrix:
+        include:
+          # Ubuntu 22.04 is the oldest runner, and the binary needs the C library of the system it is built on or a
+          # newer one.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-apple-darwin
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install
+          rustup target add ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Run it
+        run: target/${{ matrix.target }}/release/claudegrep --version
+
+      - name: Package
+        env:
+          # Keeps macOS tar from adding `._` files for extended attributes.
+          COPYFILE_DISABLE: 1
+        run: |
+          archive="claudegrep-$GITHUB_REF_NAME-${{ matrix.target }}.tar.gz"
+          tar -czf "$archive" -C "target/${{ matrix.target }}/release" claudegrep -C "$GITHUB_WORKSPACE" README.md COPYING COPYING.LESSER
+          shasum -a 256 "$archive" > "$archive.sha256"
+
+      - name: Upload
+        run: gh release upload "$GITHUB_REF_NAME" claudegrep-*.tar.gz claudegrep-*.tar.gz.sha256
+
+  publish:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release edit "$GITHUB_REF_NAME" --draft=false

@@ -1,0 +1,42 @@
+---
+source: src/chunk.rs
+expression: listing
+---
+--- 0.0 user 2026-01-01T10:00:00.000Z
+Why does `cargo test` fail on CI but not locally? 🤖
+--- 1.0 assistant 2026-01-01T10:01:00.000Z
+Let me look at the CI config.
+
+Found it:
+
+The CI runner uses a different locale.
+
+## What differs
+
+The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. The test sorts file names, and the order of ä and z depends on the locale. 
+
+```sh
+# run with the CI locale
+LANG=C cargo test
+
+## not a heading
+```
+
+### Details
+
+- `LANG` is unset on CI
+- the test compares sorted names
+--- 1.1 assistant 2026-01-01T10:01:00.000Z
+## Fix
+
+Sort with a locale-independent key, so both machines agree. Sort with a locale-independent key, so both machines agree. Sort with a locale-independent key, so both machines agree. Sort with a locale-independent key, so both machines agree. Sort with a locale-independent key, so both machines agree. Sort with a locale-independent key, so both machines agree.
+--- 2.0 agent 2026-01-01T10:03:30.000Z
+Task: Find the sort
+
+Names are sorted in src/list.rs by sort_names(), which uses the default string order.
+--- 5.0 user 2026-01-01T10:06:00.000Z
+And this log, in Japanese?
+--- 6.0 assistant 2026-01-01T10:07:00.000Z
+ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違い
+--- 6.1 assistant 2026-01-01T10:07:00.000Z
+を示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。ログはロケールの違いを示しています。
