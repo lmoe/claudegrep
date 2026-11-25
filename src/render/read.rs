@@ -85,7 +85,7 @@ mod tests {
     }
 
     fn directory() -> Scope {
-        Scope::Directory { root: "/p".into(), project_dir: "-p".into() }
+        Scope::Directory { root: "/p".into() }
     }
 
     const fn content(deep: bool, later: Option<usize>, earlier: Option<Earlier>) -> ReadMode {

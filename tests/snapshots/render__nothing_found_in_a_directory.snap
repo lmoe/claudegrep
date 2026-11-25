@@ -6,4 +6,4 @@ expression: "render::search(&view(directory(), \"nothing\", Vec::new()))"
 
 *0 matches in 0 sessions, `/home/dev/app`*
 
-*(no sessions started in `/home/dev/app`; `claudegrep --all search` covers every project)*
+*(no sessions in `/home/dev/app`; `claudegrep --all search` covers every project)*

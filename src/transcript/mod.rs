@@ -11,6 +11,8 @@ pub use parser::{agent_report, parse};
 pub struct Session {
     pub id: String,
     pub meta: SessionMeta,
+    /// Every working directory its entries name, in the order they first appear, so the first is `meta.cwd`.
+    pub cwds: Vec<String>,
     pub turns: Vec<Turn>,
 }
 

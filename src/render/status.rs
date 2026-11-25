@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn status_reports_the_scope_the_whole_index_and_the_setup() {
-        let directory = Scope::Directory { root: "/p/app".into(), project_dir: "-p-app".into() };
+        let directory = Scope::Directory { root: "/p/app".into() };
         insta::assert_snapshot!(status(&view(directory, Some("colbert:answerai@1"))), @r"
         # claudegrep status
 

@@ -12,8 +12,9 @@ Search, list and read past Claude Code sessions, to bring context from earlier c
 into the current one.
 
 SCOPE
-  By default only sessions started in exactly the current directory are listed, read and \
-searched. Subdirectories and other projects need --all. Every project is indexed either way, \
+  By default only the sessions of exactly the current directory are listed, read and searched. \
+A session is in the directory it started in and in the directory its last /cd went to. \
+Subdirectories and other projects need --all. Every project is indexed either way, \
 and claudegrep keeps its own compressed copy of every transcript, so sessions stay readable \
 after Claude Code deletes old transcripts (cleanupPeriodDays, 30 days by default).
 
@@ -55,7 +56,7 @@ pub struct Cli {
     #[command(flatten)]
     search: SearchOptions,
 
-    #[arg(long, global = true, help = "Use every project's sessions, not only those started in the current directory")]
+    #[arg(long, global = true, help = "Use every project's sessions, not only those of the current directory")]
     all: bool,
 
     #[arg(

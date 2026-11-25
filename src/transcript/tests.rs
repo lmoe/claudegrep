@@ -267,6 +267,22 @@ fn sidechain_entries_are_left_out_but_count_for_the_time_span() {
 }
 
 #[test]
+fn every_working_directory_is_kept_once_in_the_order_it_first_appears() {
+    let transcript = Transcript::new("/a")
+        .raw(r#"{"type":"user","cwd":"/no-timestamp","message":{"role":"user","content":"skipped"}}"#)
+        .user("first")
+        .cwd("/b")
+        .assistant("a", vec![text("Moved.")])
+        .cwd("/a")
+        .user("back")
+        .cwd("/c")
+        .entry("system", json!({ "subtype": "local_command" }));
+    let parsed = parsed(&transcript);
+    assert_eq!(parsed.cwds, ["/a", "/b", "/c"]);
+    assert_eq!(parsed.meta.cwd.as_deref(), Some("/a"));
+}
+
+#[test]
 fn system_and_attachment_entries_count_for_the_time_span_only() {
     let transcript = Transcript::new(CWD)
         .user("prompt")

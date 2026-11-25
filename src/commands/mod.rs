@@ -106,7 +106,7 @@ mod tests {
         let store = store();
         assert_eq!(resolve(&store, "0").unwrap_err().to_string(), "no session 0; see `claudegrep --all list`");
         assert_eq!(resolve(&store, "zz").unwrap_err().to_string(), "no session zz; see `claudegrep --all list`");
-        let directory = Filter { scope: Scope::Directory { root: "/p".into(), project_dir: "-p".into() }, ..Filter::default() };
+        let directory = Filter { scope: Scope::Directory { root: "/p".into() }, ..Filter::default() };
         assert_eq!(
             resolve_session(&store, &directory, "zz").unwrap_err().to_string(),
             "no session zz in `/p`; see `claudegrep list`, or pass --all for other projects"

@@ -15,6 +15,7 @@ use support::lines::{Transcript, agent_meta, document, image, text, thinking, to
 const TOKEN: &str = "aaaa1111-0000-4000-8000-000000000001";
 const NOTES: &str = "aaaa2222-0000-4000-8000-000000000002";
 const CI: &str = "bbbb3333-0000-4000-8000-000000000003";
+const MOVED: &str = "cccc4444-0000-4000-8000-000000000004";
 
 struct Project {
     fixture: Fixture,
@@ -395,6 +396,117 @@ fn other_project_is_untouched_by_scope() {
     let project = Project::new();
     let other = project.fixture.run_in(&project.other, &["list"]).success();
     assert!(other.contains("Set up CI") && !other.contains("Release notes"));
+}
+
+#[test]
+fn a_session_moved_with_cd_is_listed_where_it_started_and_where_it_moved_to() {
+    let fixture = Fixture::new();
+    let (start, moved) = (fixture.dir("start"), fixture.dir("moved"));
+    // After `/cd`, Claude Code keeps the transcript in the project directory of the new directory, but the first entries
+    // still name the old one.
+    let transcript = Transcript::new(start.to_str().unwrap())
+        .user("Plan the parser rewrite")
+        .assistant("m1", vec![text("First split the lexer from the parser.")])
+        .cwd(moved.to_str().unwrap())
+        .user("Now write the lexer")
+        .assistant("m2", vec![text("The lexer is in src/lexer.rs now.")])
+        .ai_title("Parser rewrite");
+    fixture.session(&moved, MOVED, &transcript);
+
+    let unlisted: Vec<_> =
+        [&start, &moved].into_iter().filter(|dir| !fixture.run_in(dir, &["list"]).success().contains("Parser rewrite")).collect();
+    assert!(unlisted.is_empty(), "the session is not listed in {unlisted:?}");
+}
+
+#[test]
+fn a_transcript_moved_after_it_was_indexed_is_one_session() {
+    let fixture = Fixture::new();
+    let (start, moved) = (fixture.dir("start"), fixture.dir("moved"));
+    let (start_cwd, moved_cwd) = (start.to_str().unwrap(), moved.to_str().unwrap());
+    let transcript = Transcript::new(start_cwd)
+        .user("Plan the parser rewrite")
+        .assistant("m1", vec![text("First split the lexer from the parser.")])
+        .ai_title("Parser rewrite");
+    fixture.session(&start, MOVED, &transcript);
+    let report = text("The lexer lives in src/lexer.rs and reads one token at a time from the input.");
+    let agent = Transcript::sidechain(start_cwd).at("2026-01-01T10:00:30.000Z").user("Find the lexer").assistant("r1", vec![report]);
+    fixture.agent(&start, MOVED, "explore", &agent, Some(&agent_meta("Find the lexer", None)));
+    assert_eq!(fixture.run_in(&start, &["--all", "list"]).success().matches("cccc4444").count(), 1);
+
+    fixture.move_session(&start, &moved, MOVED);
+    let later = Transcript::new(moved_cwd).at("2026-01-01T11:00:00.000Z").user("Now write the lexer");
+    fixture.append(&moved, MOVED, &later);
+
+    let all = fixture.run_in(&start, &["--all", "list"]).success();
+    assert_eq!(all.matches("cccc4444").count(), 1, "{all}");
+    assert!(!all.contains("*archived*"), "the transcript is still on disk:\n{all}");
+    for dir in [&start, &moved] {
+        let read = fixture.run_in(dir, &["read", "cccc4444"]).success();
+        assert!(read.contains("Now write the lexer") && read.contains("src/lexer.rs"), "the moved transcript with its agent:\n{read}");
+    }
+}
+
+#[test]
+fn a_transcript_moved_after_it_was_indexed_without_new_entries_is_listed_where_it_moved_to() {
+    let fixture = Fixture::new();
+    let (start, moved) = (fixture.dir("start"), fixture.dir("moved"));
+    // The entries after `/cd` were written before the move was indexed, so the moved file is the same as the archived one.
+    let transcript = Transcript::new(start.to_str().unwrap())
+        .user("Plan the parser rewrite")
+        .assistant("m1", vec![text("First split the lexer from the parser.")])
+        .cwd(moved.to_str().unwrap())
+        .user("Now write the lexer")
+        .ai_title("Parser rewrite");
+    fixture.session(&start, MOVED, &transcript);
+    fixture.run_in(&start, &["list"]).success();
+
+    fixture.move_session(&start, &moved, MOVED);
+    let unlisted: Vec<_> =
+        [&start, &moved].into_iter().filter(|dir| !fixture.run_in(dir, &["list"]).success().contains("Parser rewrite")).collect();
+    assert!(unlisted.is_empty(), "the session is not listed in {unlisted:?}");
+}
+
+#[test]
+fn a_shell_cd_to_a_directory_with_the_same_encoded_name_adds_no_directory() {
+    let fixture = Fixture::new();
+    // `a.b`, `a-b` and `a/b` share one project directory.
+    for (start, shell, id, title) in [("a.b", "a-b", TOKEN, "Dot session"), ("a-b", "a/b", NOTES, "Dash session")] {
+        let (start, shell) = (fixture.dir(start), fixture.dir(shell));
+        let transcript = Transcript::new(start.to_str().unwrap())
+            .user("Look around")
+            .cwd(shell.to_str().unwrap())
+            .assistant("m1", vec![text("Looked around.")])
+            .ai_title(title);
+        fixture.session(&start, id, &transcript);
+    }
+    let listed = |dir: &str| fixture.run_in(&fixture.dir(dir), &["list"]).success();
+    let (dot, dash, slash) = (listed("a.b"), listed("a-b"), listed("a/b"));
+    assert!(dot.contains("Dot session") && !dot.contains("Dash session"), "{dot}");
+    assert!(dash.contains("Dash session") && !dash.contains("Dot session"), "{dash}");
+    assert!(!slash.contains("Dot session") && !slash.contains("Dash session"), "{slash}");
+}
+
+#[test]
+fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
+    let fixture = Fixture::new();
+    let repo = fixture.dir("repo");
+    let src = repo.join("src");
+    fs::create_dir_all(repo.join(".git")).unwrap();
+    fs::create_dir_all(&src).unwrap();
+    let cwd = repo.to_str().unwrap();
+    let drifted = Transcript::new(cwd)
+        .user("Run the tests in src")
+        .assistant("d1", vec![text("Running them from src.")])
+        .cwd(src.to_str().unwrap())
+        .assistant("d2", vec![text("They pass.")])
+        .ai_title("Tests from src");
+    fixture.session(&repo, TOKEN, &drifted);
+    let other = Transcript::new(cwd).user("Write the changelog").assistant("c1", vec![text("Done.")]).ai_title("Changelog");
+    fixture.session(&repo, NOTES, &other);
+
+    let from_src = fixture.run_in(&src, &["list"]).success();
+    assert_eq!(from_src, fixture.run_in(&repo, &["list"]).success());
+    assert!(from_src.contains("Tests from src") && from_src.contains("Changelog"), "{from_src}");
 }
 
 #[test]

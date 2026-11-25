@@ -7,7 +7,7 @@ Index every project now (search does this on its own)
 Usage: claudegrep index [OPTIONS]
 
 Options:
-      --all           Use every project's sessions, not only those started in the current directory
+      --all           Use every project's sessions, not only those of the current directory
       --since <WHEN>  Only sessions active since WHEN: a date (2026-10-14) or an age (30m, 6h, 2d, 1w, 3mo)
       --until <WHEN>  Only sessions active until WHEN: a date (whole day included) or an age
       --db <FILE>     Database with the index, the transcript archive and the settings [env: CLAUDEGREP_DB=[ROOT]/db.sqlite]
