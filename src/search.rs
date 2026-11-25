@@ -437,9 +437,9 @@ mod tests {
     }
 
     #[test]
-    fn find_ranks_by_meaning_without_a_lexical_match() {
+    fn find_ranks_a_query_of_a_short_and_a_long_word_by_the_long_word() {
         let (store, encoder) = indexed();
-        // Every word is shorter than three characters, so there is no text search, only the vectors.
+        // Only `cake` has three characters, so the text search looks for it alone.
         let groups = find(&store, &Filter::default(), &encoder, "a cake", window(1, 0, 0)).unwrap();
         assert_eq!(summary(&groups), [("cake".to_owned(), vec![(0, 0..1)])]);
     }
