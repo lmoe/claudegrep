@@ -660,6 +660,17 @@ mod tests {
     }
 
     #[test]
+    fn a_refresh_with_nothing_new_does_not_wait_for_another_writer() {
+        let mut indexed = Indexed::new();
+        let hold = Duration::from_millis(1500);
+        let (locked_at, holder) = crate::test_support::store::hold_write_lock(&indexed.dir.path().join("index.sqlite"), hold);
+        assert_eq!(indexed.refresh(), (0, 0));
+        let waited = locked_at.elapsed();
+        holder.join().unwrap();
+        assert!(waited < hold, "a refresh with nothing new waited {waited:?}");
+    }
+
+    #[test]
     fn a_moved_transcript_is_followed_while_another_process_writes() {
         let mut indexed = Indexed::new();
         let moved = move_to_q(&indexed.project);
