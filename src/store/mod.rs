@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, Params, Row, Statement, TransactionBehavior, params};
@@ -67,14 +67,17 @@ pub struct Stats {
     pub vector_bytes: u64,
 }
 
+const BUSY_TIMEOUT: Duration = Duration::from_secs(60);
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
         let mut conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
-        conn.busy_timeout(Duration::from_secs(60))?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        enable_wal(&conn)?;
+        conn.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
         schema::ensure(&mut conn)?;
         Ok(Self { conn })
     }
@@ -304,6 +307,22 @@ fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
     Ok(conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| row.get(0)).optional()?)
 }
 
+/// The switch to WAL fails with "database is locked" at once, without the busy timeout, when another connection
+/// switches it too. The other one wins, so it is enough to ask again.
+fn enable_wal(conn: &Connection) -> Result<()> {
+    let deadline = Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0)) {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == rusqlite::ErrorCode::DatabaseBusy && Instant::now() < deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => return result.map(drop).map_err(Into::into),
+        }
+    }
+}
+
 fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)", [key, value])?;
     Ok(())
@@ -314,8 +333,6 @@ mod tests {
     use super::*;
     use crate::chunk::{self, Role};
     use crate::test_support::lines::Transcript;
-    use std::time::Instant;
-
     use crate::test_support::store::{TempStore, hold_write_lock};
 
     pub(super) const STAMP: FileStamp = FileStamp { size: 7, mtime: 1_767_261_600_000_000_000 };
@@ -484,6 +501,27 @@ mod tests {
         assert!(!store.use_embedder("model-a").unwrap());
         assert!(locked_at.elapsed() < hold, "a read waited for the holder");
         holder.join().unwrap();
+    }
+
+    #[test]
+    fn two_processes_create_a_new_index_at_once() {
+        for _ in 0..30 {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().join("index.sqlite");
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let openers: Vec<_> = (0..2)
+                .map(|_| {
+                    let (path, barrier) = (path.clone(), barrier.clone());
+                    std::thread::spawn(move || {
+                        barrier.wait();
+                        Store::open(&path).map(drop)
+                    })
+                })
+                .collect();
+            for opener in openers {
+                opener.join().unwrap().unwrap_or_else(|error| panic!("{error:#}"));
+            }
+        }
     }
 
     fn two_archived_sessions() -> TempStore {
