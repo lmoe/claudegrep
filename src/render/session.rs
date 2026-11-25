@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn marks_name_the_directory_only_for_all_projects() {
-        let directory = Scope::Directory { root: "/p".into(), project_dir: "-p".into() };
+        let directory = Scope::Directory { root: "/p".into() };
         let (here, archived, unknown) = (row(Some("/p"), false), row(Some("/p"), true), row(None, true));
         assert_eq!(Meta::from(&here).marks(&directory).to_string(), "");
         assert_eq!(Meta::from(&here).marks(&Scope::All).to_string(), " · `/p`");

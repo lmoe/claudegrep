@@ -42,7 +42,7 @@ Claude uses the tool once it knows that it exists and when to reach for it. Add 
 
 `claudegrep` searches, lists and reads the transcripts of earlier Claude Code sessions, including ones Claude Code has already deleted. Use it before asking me or starting over whenever I point at earlier work ("like last time", "the fix from yesterday", "what did we decide about X"), or when an earlier session probably settled what you are about to work out again.
 
-It sees the sessions started in the current directory, or in its git root when the directory has none. `--all` widens that to every project and goes before or after the subcommand. A session is named by the 8-character id that output prints, or by its number in `list`. Reading a session from another project needs `--all` too.
+It sees the sessions started in the current directory or moved there with `/cd`, or those of its git root when the directory has none. `--all` widens that to every project and goes before or after the subcommand. A session is named by the 8-character id that output prints, or by its number in `list`. Reading a session from another project needs `--all` too.
 
 - `claudegrep "token refresh bug"`: search this project. Meaning and exact words both count, results are grouped by session, and every match comes with the `read --from` command that opens it.
 - `claudegrep search status`: the same search, written out. A query that is one of the words `list`, `read`, `search`, `index`, `status`, `config`, `forget` or `help` runs that command, so it needs this form.

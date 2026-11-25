@@ -19,7 +19,7 @@ pub use tx::{ArchiveRow, SessionKey, StoreTx};
 
 /// Whether the session `s` passes a [`Filter`], whose values [`Filter::bind`] sets. A window leaves out only sessions it
 /// knows to be outside it, so one without timestamps stays in.
-const PASSES_FILTER: &str = "(:root IS NULL OR (s.project_dir = :project_dir AND s.cwd = :root))
+const PASSES_FILTER: &str = "(:root IS NULL OR EXISTS (SELECT 1 FROM session_dirs d WHERE d.path = s.path AND d.dir = :root))
     AND s.session_id IS NOT :exclude
     AND (julianday(s.last_ts) < julianday(:since)) IS NOT TRUE
     AND (julianday(s.first_ts) > julianday(:until)) IS NOT TRUE";
@@ -41,7 +41,6 @@ pub struct Filter {
 impl Filter {
     fn bind(&self, stmt: &mut Statement<'_>) -> rusqlite::Result<()> {
         stmt.raw_bind_parameter(":root", self.scope.root().map(Path::to_string_lossy))?;
-        stmt.raw_bind_parameter(":project_dir", self.scope.project_dir())?;
         stmt.raw_bind_parameter(":exclude", self.exclude.as_deref())?;
         stmt.raw_bind_parameter(":since", self.since)?;
         stmt.raw_bind_parameter(":until", self.until)
@@ -485,13 +484,27 @@ mod tests {
         store.add("-p-a-b", "s2", &Transcript::new("/p/a.b").user("dot project"));
         store.add("-p-a-b-sub", "s3", &Transcript::new("/p/a-b/sub").user("subdirectory"));
 
-        let filter = Filter { scope: Scope::Directory { root: "/p/a-b".into(), project_dir: "-p-a-b".into() }, ..Filter::default() };
+        let filter = Filter { scope: Scope::Directory { root: "/p/a-b".into() }, ..Filter::default() };
         assert_eq!(ids(&store, &filter), ["s1"]);
         assert_eq!(store.lexical(&filter, "\"project\"", 10).unwrap(), [ChunkHash::of("dash project")]);
         assert_eq!(store.stats(&filter).unwrap().chunks, 1);
         assert!(store.occurrences(&filter, &ChunkHash::of("dot project")).unwrap().is_empty());
         assert_eq!(store.pending().unwrap().len(), 3);
         assert_eq!(store.stats(&Filter::default()).unwrap().sessions, 3);
+    }
+
+    #[test]
+    fn a_session_moved_with_cd_is_in_the_directory_it_started_in_and_in_the_one_it_moved_to() {
+        let mut store = TempStore::new();
+        // Started in /w/x, moved with `/cd` to /w/a-b, which holds the transcript, then a shell `cd` went to /w/a-b/src.
+        let transcript = Transcript::new("/w/x").user("start").cwd("/w/a-b").user("moved").cwd("/w/a-b/src").user("shell");
+        store.add("-w-a-b", "s1", &transcript);
+        let directory = |root: &str| Filter { scope: Scope::Directory { root: root.into() }, ..Filter::default() };
+        assert_eq!(ids(&store, &directory("/w/x")), ["s1"]);
+        assert_eq!(ids(&store, &directory("/w/a-b")), ["s1"]);
+        assert_eq!(ids(&store, &directory("/w/a/b")), Vec::<String>::new(), "no entry names it, though it has the same encoded name");
+        assert_eq!(ids(&store, &directory("/w/a-b/src")), Vec::<String>::new(), "a shell cd does not move the session");
+        assert_eq!(store.lexical(&directory("/w/x"), "\"moved\"", 10).unwrap(), [ChunkHash::of("moved")]);
     }
 
     fn ids(store: &Store, filter: &Filter) -> Vec<String> {
@@ -521,7 +534,7 @@ mod tests {
     fn a_filter_combines_scope_window_and_exclusion() {
         let store = three_sessions();
         let all = || Scope::All;
-        let p = || Scope::Directory { root: "/p".into(), project_dir: "-p".into() };
+        let p = || Scope::Directory { root: "/p".into() };
         let (no, excluded) = (None, Some("early"));
         let (any, since, until, both) = ((None, None), (at(3), None), (None, at(8)), (at(3), at(8)));
         let cases: [(Scope, Window, Option<&str>, &[&str]); 16] = [
@@ -562,12 +575,7 @@ mod tests {
     #[test]
     fn a_session_is_in_a_window_it_overlaps() {
         let store = three_sessions();
-        let filter = |since, until| Filter {
-            since,
-            until,
-            scope: Scope::Directory { root: "/o".into(), project_dir: "-o".into() },
-            ..Filter::default()
-        };
+        let filter = |since, until| Filter { since, until, scope: Scope::Directory { root: "/o".into() }, ..Filter::default() };
         // `other` starts on day 5, and its second and last message is on day 6.
         let (first, last) = (at(5).unwrap(), at(6).unwrap());
         let [before, after] =

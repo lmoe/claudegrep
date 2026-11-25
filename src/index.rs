@@ -122,6 +122,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use super::*;
+    use crate::discover::Scope;
     use crate::store::{Filter, SessionRow};
     use crate::transcript::Turn;
 
@@ -415,6 +416,32 @@ mod tests {
         assert_eq!((second.stored, second.parsed), (1, 1));
         let loaded = load_session(&store, "-p/s1.jsonl", "s1").unwrap();
         assert!(loaded.turns.iter().any(|turn| matches!(turn, Turn::Agent(_))), "the agent report is attached");
+    }
+
+    fn in_directory(root: &str) -> Filter {
+        Filter { scope: Scope::Directory { root: root.into() }, ..Filter::default() }
+    }
+
+    #[test]
+    fn an_index_of_schema_4_shows_its_sessions_in_their_directory_after_the_upgrade() {
+        let mut indexed = Indexed::new();
+        indexed.execute("DELETE FROM session_dirs; UPDATE meta SET value = '4' WHERE key = 'schema';");
+        indexed.store = Store::open(&indexed.dir.path().join("index.sqlite")).unwrap();
+        assert_eq!(indexed.refresh(), (0, 1), "the archive still holds it, so it is only parsed again");
+        assert_eq!(indexed.store.sessions(&in_directory("/p")).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_real_transcript_is_in_the_directory_it_started_in_and_not_where_its_shell_went() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let project = dir.path().join("projects").join("-id-amet-Fugiat-adipiscing-ut");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("fixture.jsonl"), include_str!("transcript/fixtures/session.jsonl")).unwrap();
+        let mut store = Store::open(&dir.path().join("index.sqlite")).unwrap();
+        refresh(&mut store, std::slice::from_ref(&project)).unwrap();
+        let count = |root: &str| store.count_sessions(&in_directory(root)).unwrap();
+        assert_eq!(count("/id/amet/Fugiat/adipiscing-ut"), 1);
+        assert_eq!(count("/id/amet/Fugiat/adipiscing-ut/aute/laborum/officia"), 0, "a shell cd went there");
     }
 
     #[test]

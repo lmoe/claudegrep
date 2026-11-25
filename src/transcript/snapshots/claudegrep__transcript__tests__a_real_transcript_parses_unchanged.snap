@@ -12,6 +12,11 @@ Session {
         first: "2026-09-17T13:11:28.619Z",
         last: "2026-09-17T13:23:16.423Z",
     },
+    cwds: [
+        "/id/amet/Fugiat/adipiscing-ut",
+        "/id/amet/Fugiat/adipiscing-ut/aute/laborum/officia",
+        "/id/amet/Fugiat/adipiscing-ut/aute/laborum/officia/qui/_irure",
+    ],
     turns: [
         User(
             UserTurn {

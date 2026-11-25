@@ -3,7 +3,7 @@ use rusqlite::Connection;
 
 use super::{get_meta, set_meta};
 
-const SCHEMA_VERSION: &str = "4";
+const SCHEMA_VERSION: &str = "5";
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -21,6 +21,11 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_project ON sessions (project_dir);
 CREATE INDEX sessions_id ON sessions (session_id);
+CREATE TABLE session_dirs (
+    path TEXT NOT NULL REFERENCES sessions (path) ON DELETE CASCADE,
+    dir TEXT NOT NULL,
+    PRIMARY KEY (path, dir)
+) WITHOUT ROWID;
 CREATE TABLE chunks (
     path TEXT NOT NULL REFERENCES sessions (path) ON DELETE CASCADE,
     turn INTEGER NOT NULL,
@@ -66,7 +71,7 @@ pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
     if version.as_deref() != Some(SCHEMA_VERSION) {
         tx.execute_batch(
             "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS vectors; DROP TABLE IF EXISTS chunk_fts;
-             DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS meta;",
+             DROP TABLE IF EXISTS session_dirs; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS meta;",
         )?;
         tx.execute_batch(SCHEMA)?;
         set_meta(&tx, "schema", SCHEMA_VERSION)?;

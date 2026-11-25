@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::{Transaction, params};
 
 use crate::chunk::{self, Chunk};
-use crate::discover::FileStamp;
+use crate::discover::{self, FileStamp};
 use crate::transcript::Session;
 
 pub struct ArchiveRow {
@@ -54,6 +54,12 @@ impl StoreTx<'_> {
                 session.map_or(0, |s| s.turns.len()),
             ],
         )?;
+        if let Some(session) = session {
+            let mut insert = self.0.prepare_cached("INSERT INTO session_dirs (path, dir) VALUES (?1, ?2)")?;
+            for dir in discover::session_dirs(key.project_dir, &session.cwds) {
+                insert.execute(params![key.path, dir])?;
+            }
+        }
         let mut insert = self
             .0
             .prepare_cached("INSERT INTO chunks (path, turn, part, role, ts, text, hash, key) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")?;
@@ -80,6 +86,7 @@ impl StoreTx<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::discover::Scope;
     use crate::store::Filter;
     use crate::test_support::lines::Transcript;
     use crate::test_support::session;
@@ -145,6 +152,16 @@ mod tests {
         write(&mut store, "second text");
         assert_eq!(texts(&store), ["second text"]);
         assert_eq!(store.stats(&Filter::default()).unwrap().sessions, 1);
+    }
+
+    #[test]
+    fn writing_a_session_again_replaces_its_directories() {
+        let mut store = TempStore::new();
+        store.add("-p", "s1", &Transcript::new("/old").user("first text"));
+        store.add("-p", "s1", &Transcript::new("/new").user("second text"));
+        let directory = |root: &str| Filter { scope: Scope::Directory { root: root.into() }, ..Filter::default() };
+        assert_eq!(store.count_sessions(&directory("/old")).unwrap(), 0);
+        assert_eq!(store.count_sessions(&directory("/new")).unwrap(), 1);
     }
 
     #[test]

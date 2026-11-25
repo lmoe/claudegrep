@@ -29,6 +29,12 @@ impl Transcript {
         self
     }
 
+    /// Entries after this one have `cwd` as their working directory, as after `/cd` or a `cd` in a shell command.
+    pub fn cwd(mut self, cwd: &str) -> Self {
+        self.cwd = cwd.to_owned();
+        self
+    }
+
     pub fn user(self, text: &str) -> Self {
         self.entry("user", json!({ "message": { "role": "user", "content": text } }))
     }

@@ -37,7 +37,7 @@ fn main() {
 }
 
 fn directory() -> Scope {
-    Scope::Directory { root: "/home/dev/app".into(), project_dir: "-home-dev-app".into() }
+    Scope::Directory { root: "/home/dev/app".into() }
 }
 
 fn session(id: &str, title: &str, turns: usize, archived: bool) -> SessionRow {

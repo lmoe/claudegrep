@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn an_empty_scope_names_a_moved_projects_root_and_how_to_undo_it() {
-        let directory = Scope::Directory { root: "/p/app".into(), project_dir: "-p-app".into() };
+        let directory = Scope::Directory { root: "/p/app".into() };
         let root = Some(Path::new("/test/projects"));
         assert_eq!(
             nothing_here(&directory, "search", root),
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn scope_names_and_invocations() {
-        let directory = Scope::Directory { root: "/p/app".into(), project_dir: "-p-app".into() };
+        let directory = Scope::Directory { root: "/p/app".into() };
         assert_eq!(scope_name(&directory), "`/p/app`");
         assert_eq!(scope_name(&Scope::All), "all projects");
         assert_eq!(invocation(&directory), "claudegrep");

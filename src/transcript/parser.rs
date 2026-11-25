@@ -91,7 +91,7 @@ struct Parser {
     custom_title: Option<String>,
     first_timestamp: Option<Timestamp>,
     last_timestamp: Option<Timestamp>,
-    cwd: Option<String>,
+    cwds: Vec<String>,
     turns: Vec<Turn>,
     /// Tool calls by id. Results arrive in later entries and are attached when parsing finishes.
     calls: HashMap<String, BlockRef>,
@@ -139,8 +139,10 @@ impl Parser {
         };
         self.first_timestamp.get_or_insert(timestamp);
         self.last_timestamp = Some(timestamp);
-        if self.cwd.is_none() {
-            self.cwd = entry.cwd;
+        if let Some(cwd) = entry.cwd
+            && !self.cwds.contains(&cwd)
+        {
+            self.cwds.push(cwd);
         }
         if entry.is_sidechain == Some(true) {
             return;
@@ -218,8 +220,8 @@ impl Parser {
             return None;
         }
         let title = self.custom_title.or(self.ai_title).or_else(|| fallback_title(&self.turns))?;
-        let meta = SessionMeta { title, cwd: self.cwd, first: self.first_timestamp?, last: self.last_timestamp? };
-        Some(Session { id: id.to_owned(), meta, turns: self.turns })
+        let meta = SessionMeta { title, cwd: self.cwds.first().cloned(), first: self.first_timestamp?, last: self.last_timestamp? };
+        Some(Session { id: id.to_owned(), meta, cwds: self.cwds, turns: self.turns })
     }
 }
 

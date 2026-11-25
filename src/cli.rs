@@ -12,8 +12,8 @@ Search, list and read past Claude Code sessions, to bring context from earlier c
 into the current one.
 
 SCOPE
-  By default only sessions started in exactly the current directory are listed, read and \
-searched. Subdirectories and other projects need --all. Every project is indexed either way, \
+  By default only sessions started in exactly the current directory, or moved to it with /cd, \
+are listed, read and searched. Subdirectories and other projects need --all. Every project is indexed either way, \
 and claudegrep keeps its own compressed copy of every transcript, so sessions stay readable \
 after Claude Code deletes old transcripts (cleanupPeriodDays, 30 days by default).
 

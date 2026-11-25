@@ -115,13 +115,21 @@ fn stem(path: &Path) -> String {
     path.file_stem().unwrap_or_default().to_string_lossy().into_owned()
 }
 
+/// The directories a session is in, out of the working directories its entries name (`cwds`, the first one first). It
+/// is in the one it started in. It is also in a later one whose name gives the project directory that holds the
+/// transcript: after `/cd`, Claude Code keeps the transcript in the project directory of the new directory. A `cd` in a
+/// shell command changes only the working directory of later entries, so its directory does not count. The whole path is
+/// stored and compared, because `encode` gives `/w/a-b` and `/w/a/b` the same project directory.
+pub fn session_dirs<'a>(project_dir: &str, cwds: &'a [String]) -> impl Iterator<Item = &'a str> {
+    cwds.iter().enumerate().filter(move |(index, cwd)| *index == 0 || encode(Path::new(cwd)) == project_dir).map(|(_, cwd)| cwd.as_str())
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Scope {
     #[default]
     All,
     Directory {
         root: PathBuf,
-        project_dir: String,
     },
 }
 
@@ -129,20 +137,13 @@ impl Scope {
     pub fn candidates(cwd: &Path) -> Vec<Self> {
         let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
         let git_root = git_root(&cwd).filter(|root| *root != cwd);
-        std::iter::once(cwd).chain(git_root).map(|root| Self::Directory { project_dir: encode(&root), root }).collect()
+        std::iter::once(cwd).chain(git_root).map(|root| Self::Directory { root }).collect()
     }
 
     pub fn root(&self) -> Option<&Path> {
         match self {
             Self::All => None,
-            Self::Directory { root, .. } => Some(root),
-        }
-    }
-
-    pub fn project_dir(&self) -> Option<&str> {
-        match self {
-            Self::All => None,
-            Self::Directory { project_dir, .. } => Some(project_dir),
+            Self::Directory { root } => Some(root),
         }
     }
 
@@ -298,9 +299,7 @@ mod tests {
 
         let candidates = Scope::candidates(&sub);
         let roots: Vec<_> = candidates.iter().map(|scope| scope.root().unwrap().to_path_buf()).collect();
-        assert_eq!(roots, [sub.clone(), repo.clone()]);
-        assert_eq!(candidates[0].project_dir(), Some(encode(&sub).as_str()));
-        assert_eq!(candidates[1].project_dir(), Some(encode(&repo).as_str()));
+        assert_eq!(roots, [sub, repo]);
     }
 
     #[test]
@@ -323,11 +322,18 @@ mod tests {
     }
 
     #[test]
-    fn all_has_no_root_and_no_project_dir() {
+    fn all_has_no_root() {
         assert!(Scope::All.is_all());
         assert_eq!(Scope::All.root(), None);
-        assert_eq!(Scope::All.project_dir(), None);
-        let directory = Scope::Directory { root: "/p".into(), project_dir: "-p".into() };
+        let directory = Scope::Directory { root: "/p".into() };
         assert!(!directory.is_all());
+    }
+
+    #[test]
+    fn a_session_is_in_its_first_directory_and_in_those_its_project_directory_is_named_after() {
+        let cwds = ["/w/x", "/w/a-b", "/w/a-b/src", "/w/x/y", "/w/a/b"].map(str::to_owned);
+        let dirs: Vec<_> = session_dirs("-w-a-b", &cwds).collect();
+        assert_eq!(dirs, ["/w/x", "/w/a-b", "/w/a/b"], "an entry that names /w/a/b is the only way to tell it from /w/a-b");
+        assert_eq!(session_dirs("-w-a-b", &[]).count(), 0);
     }
 }
