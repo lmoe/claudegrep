@@ -135,4 +135,43 @@ mod tests {
         let store = Store::open(&path).unwrap();
         assert_eq!(store.archived_files().unwrap().len(), 1, "opening a current index changes nothing");
     }
+
+    fn index_with_archive_and_vector(path: &std::path::Path) {
+        let mut store = Store::open(path).unwrap();
+        store.set_config_value("limit", Some("3")).unwrap();
+        let tx = store.transaction().unwrap();
+        tx.archive(&archive_row("-p/s1.jsonl", None, b"main")).unwrap();
+        tx.commit().unwrap();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("hello there"), tokens: 1, data: &[1] }]).unwrap();
+        store.use_embedder("model").unwrap();
+    }
+
+    fn assert_rebuilt_without_vectors(path: &std::path::Path) {
+        let store = Store::open(path).unwrap();
+        assert_eq!(store.config_value("limit").unwrap().as_deref(), Some("3"));
+        assert_eq!(store.archived_files().unwrap().len(), 1);
+        assert_eq!(store.stats(&Filter::default()).unwrap().embedded, 0);
+        assert_eq!(store.embedder().unwrap(), None);
+        assert_eq!(get_meta(&store.conn, "schema").unwrap().as_deref(), Some(SCHEMA_VERSION));
+    }
+
+    #[test]
+    fn an_index_without_a_meta_table_is_rebuilt_and_keeps_archive_and_config() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        index_with_archive_and_vector(&path);
+        Store::open(&path).unwrap().conn.execute_batch("DROP TABLE vectors; DROP TABLE meta;").unwrap();
+
+        assert_rebuilt_without_vectors(&path);
+    }
+
+    #[test]
+    fn an_index_of_a_newer_schema_version_is_rebuilt_without_its_vectors() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        index_with_archive_and_vector(&path);
+        Store::open(&path).unwrap().conn.execute("UPDATE meta SET value = '7' WHERE key = 'schema'", []).unwrap();
+
+        assert_rebuilt_without_vectors(&path);
+    }
 }

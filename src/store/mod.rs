@@ -309,7 +309,7 @@ mod tests {
     use super::*;
     use crate::chunk::{self, Role};
     use crate::test_support::lines::Transcript;
-    use crate::test_support::store::TempStore;
+    use crate::test_support::store::{TempStore, hold_write_lock};
 
     pub(super) const STAMP: FileStamp = FileStamp { size: 7, mtime: 1_767_261_600_000_000_000 };
 
@@ -419,6 +419,22 @@ mod tests {
         assert_eq!(store.embedder().unwrap().as_deref(), Some("model-b"));
         assert_eq!(store.stats(&Filter::default()).unwrap().embedded, 0);
         assert!(!store.use_embedder("model-c").unwrap(), "there was nothing left to drop");
+    }
+
+    #[test]
+    fn a_transaction_that_writes_first_waits_for_another_writer() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        let hold = Duration::from_millis(400);
+        let holder = hold_write_lock(&path, hold);
+
+        let started = std::time::Instant::now();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("words"), tokens: 1, data: &[1] }]).unwrap();
+        assert!(started.elapsed() >= hold / 2, "the write did not wait for the lock");
+        holder.join().unwrap();
+        assert_eq!(store.config_value("held").unwrap().as_deref(), Some("yes"));
+        assert_eq!(store.gc_vectors().unwrap(), 1, "the vector is stored");
     }
 
     fn two_archived_sessions() -> TempStore {
