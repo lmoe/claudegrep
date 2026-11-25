@@ -1,0 +1,45 @@
+---
+source: tests/render.rs
+expression: "render::search(&view(under(), \"token refresh\", vec![token_session()]))"
+---
+# Search: token refresh
+
+*2 matches in 1 session, `/home/dev` and below*
+
+## 1. Fix token refresh
+
+`aaaa1111` · 2026-03-01 09:00 – 2026-03-02 17:45 · turns 0–3 · 2 matches in turns 1, 2 · `/home/dev/app`
+
+**#0 👤 User · 2026-03-01 09:00**
+
+> Why does the token refresh fail after an hour?
+
+**#1 🤖 Claude · 2026-03-01 09:01** · match · `claudegrep --under /home/dev read aaaa1111 --from 1.0`
+
+> The clock skew check compared local time with UTC.
+>
+> So tokens looked expired early.
+
+**#1 🤖 Claude · 2026-03-01 09:01**
+
+> ## Fix
+>
+> - convert both sides to UTC
+> - allow 30 s of skew
+
+**#2 🛰 Agent · 2026-03-01 09:02** · `claudegrep --under /home/dev read aaaa1111 --from 2.0` · also in 2 other places
+
+> Task: Find token refresh
+>
+> Tokens are refreshed in src/auth.rs.
+
+---
+
+**Reading more**
+
+- `-B N`, `-A N`, `-C N` on this search: the N chunks before, after or around each match
+- `-n N` on this search: more matches, so more sessions (now 8)
+- `--since 2w`, `--until 2026-10-01`: only sessions active in that window
+- `claudegrep --under /home/dev read <id> --from TURN.PART`: read on from a match, paged; each page ends with the `--from` that continues it
+- `claudegrep --under /home/dev read <id> --outline`: one line per turn, to pick where to read
+- `--deep` on read: also tool calls, tool results and thinking

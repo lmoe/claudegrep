@@ -1,0 +1,8 @@
+---
+source: tests/cli.rs
+expression: relative
+---
+# Sessions in `[ROOT]/work/app` and below
+
+1. **Session in app** — 2026-01-01 10:00 – 2026-01-01 10:01 · `aaaa1111` · 2 turns · `[ROOT]/work/app`
+2. **Session in sub** — 2026-01-01 10:00 – 2026-01-01 10:01 · `aaaa2222` · 2 turns · `[ROOT]/work/app/sub`

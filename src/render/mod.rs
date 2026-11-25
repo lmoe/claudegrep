@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
@@ -118,11 +119,29 @@ impl fmt::Display for TurnRange {
 }
 
 pub fn scope_name(scope: &Scope) -> String {
-    scope.root().map_or_else(|| "all projects".to_owned(), |root| format!("`{}`", root.display()))
+    match scope {
+        Scope::All => "all projects".to_owned(),
+        Scope::Directory { root } => format!("`{}`", root.display()),
+        Scope::Under { root } => format!("`{}` and below", root.display()),
+    }
 }
 
-pub const fn invocation(scope: &Scope) -> &'static str {
-    if scope.is_all() { "claudegrep --all" } else { "claudegrep" }
+/// The start of a command that uses `scope` again.
+pub fn invocation(scope: &Scope) -> String {
+    match scope {
+        Scope::All => "claudegrep --all".to_owned(),
+        Scope::Directory { .. } => "claudegrep".to_owned(),
+        Scope::Under { root } => format!("claudegrep --under {}", shell_word(&root.to_string_lossy())),
+    }
+}
+
+/// `word` as one word for the shell: as it is when no character in it is special to the shell, else in single quotes.
+fn shell_word(word: &str) -> Cow<'_, str> {
+    if !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+,:@%=".contains(c)) {
+        Cow::Borrowed(word)
+    } else {
+        Cow::Owned(format!("'{}'", word.replace('\'', r"'\''")))
+    }
 }
 
 const RESET_ROOT: &str = "`claudegrep config projects-root --unset` goes back to Claude Code's own";
@@ -130,16 +149,34 @@ const RESET_ROOT: &str = "`claudegrep config projects-root --unset` goes back to
 /// Names the projects root when the settings moved it (`moved_root`), because that explains an empty scope where
 /// Claude Code does have sessions.
 pub fn nothing_here(scope: &Scope, command: &str, moved_root: Option<&Path>) -> String {
-    match (scope.root(), moved_root) {
-        (Some(dir), None) => format!("*(no sessions in `{}`; `claudegrep --all {command}` covers every project)*\n", dir.display()),
-        (Some(dir), Some(root)) => format!(
-            "*(no sessions in `{}` under `{}`, the configured projects-root; `claudegrep --all {command}` covers every \
+    match (place(scope), moved_root) {
+        (Some(place), None) => format!("*(no sessions {place}; `claudegrep --all {command}` covers every project)*\n"),
+        (Some(place), Some(root)) => format!(
+            "*(no sessions {place} under `{}`, the configured projects-root; `claudegrep --all {command}` covers every \
              project there, and {RESET_ROOT})*\n",
-            dir.display(),
             root.display()
         ),
         (None, None) => "*(none)*\n".to_owned(),
         (None, Some(root)) => format!("*(none under `{}`, the configured projects-root; {RESET_ROOT})*\n", root.display()),
+    }
+}
+
+/// Says that nothing matched because the only session in `scope` is the current one, which search skips.
+pub fn only_current(scope: &Scope) -> String {
+    match place(scope) {
+        Some(place) => {
+            format!("*(the only session {place} is the current one, which search skips; `claudegrep --all search` covers every project)*\n")
+        }
+        None => "*(the only session is the current one, which search skips)*\n".to_owned(),
+    }
+}
+
+/// Where the sessions of `scope` are, to follow "sessions", or `None` for all projects.
+fn place(scope: &Scope) -> Option<String> {
+    match scope {
+        Scope::All => None,
+        Scope::Directory { root } => Some(format!("in `{}`", root.display())),
+        Scope::Under { root } => Some(format!("in `{}` and below", root.display())),
     }
 }
 
@@ -172,6 +209,29 @@ mod tests {
         assert_eq!(invocation(&Scope::All), "claudegrep --all");
         assert_eq!(nothing_here(&directory, "list", None), "*(no sessions in `/p/app`; `claudegrep --all list` covers every project)*\n");
         assert_eq!(nothing_here(&Scope::All, "search", None), "*(none)*\n");
+    }
+
+    #[test]
+    fn the_only_current_session_is_named_with_its_scope() {
+        assert_eq!(
+            only_current(&Scope::Directory { root: "/p".into() }),
+            "*(the only session in `/p` is the current one, which search skips; `claudegrep --all search` covers every \
+             project)*\n"
+        );
+        assert_eq!(only_current(&Scope::All), "*(the only session is the current one, which search skips)*\n");
+    }
+
+    #[test]
+    fn an_under_scope_is_named_and_repeated_with_its_directory() {
+        let under = |root: &str| Scope::Under { root: root.into() };
+        assert_eq!(scope_name(&under("/p")), "`/p` and below");
+        assert_eq!(invocation(&under("/p/my-app_2")), "claudegrep --under /p/my-app_2");
+        assert_eq!(invocation(&under("/p/my app")), "claudegrep --under '/p/my app'");
+        assert_eq!(invocation(&under("/p/it's")), r"claudegrep --under '/p/it'\''s'");
+        assert_eq!(
+            nothing_here(&under("/p"), "list", None),
+            "*(no sessions in `/p` and below; `claudegrep --all list` covers every project)*\n"
+        );
     }
 
     #[test]

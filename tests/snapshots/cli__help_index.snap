@@ -8,6 +8,7 @@ Usage: claudegrep index [OPTIONS]
 
 Options:
       --all           Use every project's sessions, not only those of the current directory
+      --under <DIR>   Use the sessions of DIR and of every directory below it
       --since <WHEN>  Only sessions active since WHEN: a date (2026-10-14) or an age (30m, 6h, 2d, 1w, 3mo)
       --until <WHEN>  Only sessions active until WHEN: a date (whole day included) or an age
       --db <FILE>     Database with the index, the transcript archive and the settings [env: CLAUDEGREP_DB=[ROOT]/db.sqlite]

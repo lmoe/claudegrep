@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
 
 use crate::cli::Cli;
@@ -20,13 +20,14 @@ pub fn run(cli: Cli) -> Result<String> {
     let until = global.until.map(|when| when.resolve(Edge::End, now)).transpose()?;
     let db_path = global.db.unwrap_or_else(discover::default_db_path);
     let store = Store::open(&db_path)?;
-    commands::dispatch(command, Setup { store, db_path, all: global.all, since, until })
+    commands::dispatch(command, Setup { store, db_path, all: global.all, under: global.under, since, until })
 }
 
 pub struct Setup {
     pub store: Store,
     db_path: PathBuf,
     all: bool,
+    under: Option<PathBuf>,
     since: Option<Timestamp>,
     until: Option<Timestamp>,
 }
@@ -64,23 +65,32 @@ impl Setup {
         rayon::ThreadPoolBuilder::new().num_threads(config.threads).build_global()?;
 
         let refresh = index::refresh(&mut self.store, &project_dirs)?;
-        let scope = choose_scope(&self.store, self.all)?;
+        let scope = choose_scope(&self.store, self.all, self.under.as_deref())?;
         let filter = Filter { scope, since: self.since, until: self.until, exclude: None };
         Ok(App { store: self.store, config, filter, acceleration, db_path: self.db_path, refresh })
     }
 }
 
-fn choose_scope(store: &Store, all: bool) -> Result<Scope> {
+fn choose_scope(store: &Store, all: bool, under: Option<&Path>) -> Result<Scope> {
     if all {
         return Ok(Scope::All);
     }
-    let candidates = Scope::candidates(&std::env::current_dir()?);
+    if let Some(dir) = under {
+        let dir = if dir.is_absolute() { dir.to_path_buf() } else { current_dir()?.join(dir) };
+        return Ok(Scope::under(&dir));
+    }
+    let candidates = Scope::candidates(&current_dir()?);
     for scope in &candidates {
         if store.count_sessions(&Filter { scope: scope.clone(), ..Filter::default() })? > 0 {
             return Ok(scope.clone());
         }
     }
     Ok(candidates.into_iter().next().expect("the cwd is always a candidate"))
+}
+
+fn current_dir() -> Result<PathBuf> {
+    std::env::current_dir()
+        .context("cannot read the current directory, which may have been deleted; --all and an absolute --under DIR work without it")
 }
 
 /// claudegrep indexes in the background of a Claude Code session, so it yields the CPU to everything else.

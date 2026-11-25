@@ -17,9 +17,11 @@ use rows::FromRow;
 pub use rows::{ArchivedSession, ArchivedSessionKey, ChunkRow, ParseState, Passage, PendingChunk, SessionRow, StoredVector};
 pub use tx::{ArchiveRow, SessionKey, StoreTx};
 
-/// Whether the session `s` passes a [`Filter`], whose values [`Filter::bind`] sets. A window leaves out only sessions it
-/// knows to be outside it, so one without timestamps stays in.
-const PASSES_FILTER: &str = "(:root IS NULL OR EXISTS (SELECT 1 FROM session_dirs d WHERE d.path = s.path AND d.dir = :root))
+/// Whether the session `s` passes a [`Filter`], whose values [`Filter::bind`] sets. A directory is below the root when
+/// it starts with `:below`, the root and a slash; `LIKE` would also match `_` and `%` in it. A window leaves out only
+/// sessions it knows to be outside it, so one without timestamps stays in.
+const PASSES_FILTER: &str = "(:root IS NULL OR EXISTS (SELECT 1 FROM session_dirs d WHERE d.path = s.path
+        AND (d.dir = :root OR substr(d.dir, 1, length(:below)) = :below)))
     AND s.session_id IS NOT :exclude
     AND (julianday(s.last_ts) < julianday(:since)) IS NOT TRUE
     AND (julianday(s.first_ts) > julianday(:until)) IS NOT TRUE";
@@ -41,9 +43,18 @@ pub struct Filter {
 impl Filter {
     fn bind(&self, stmt: &mut Statement<'_>) -> rusqlite::Result<()> {
         stmt.raw_bind_parameter(":root", self.scope.root().map(Path::to_string_lossy))?;
+        stmt.raw_bind_parameter(":below", self.below())?;
         stmt.raw_bind_parameter(":exclude", self.exclude.as_deref())?;
         stmt.raw_bind_parameter(":since", self.since)?;
         stmt.raw_bind_parameter(":until", self.until)
+    }
+
+    /// The start of the name of each directory below the root of an `Under` scope.
+    fn below(&self) -> Option<String> {
+        match &self.scope {
+            Scope::Under { root } => Some(format!("{}/", root.to_string_lossy().trim_end_matches('/'))),
+            Scope::All | Scope::Directory { .. } => None,
+        }
     }
 }
 
@@ -505,6 +516,44 @@ mod tests {
         assert_eq!(ids(&store, &directory("/w/a/b")), Vec::<String>::new(), "no entry names it, though it has the same encoded name");
         assert_eq!(ids(&store, &directory("/w/a-b/src")), Vec::<String>::new(), "a shell cd does not move the session");
         assert_eq!(store.lexical(&directory("/w/x"), "\"moved\"", 10).unwrap(), [ChunkHash::of("moved")]);
+    }
+
+    fn sorted_ids(store: &Store, scope: Scope) -> Vec<String> {
+        let mut ids = ids(store, &Filter { scope, ..Filter::default() });
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn under_a_directory_are_its_sessions_and_those_below_it_but_not_a_neighbour_that_shares_its_prefix() {
+        let mut store = TempStore::new();
+        for (project, cwd, id) in [
+            ("-w-a", "/w/a", "self"),
+            ("-w-a-b", "/w/a/b", "below"),
+            ("-w-ab", "/w/ab", "neighbour"),
+            ("-w-ab-c", "/w/ab/c", "below-neighbour"),
+            ("-w-a--c", "/w/a_/c", "below-underscore"),
+            ("-w", "/w", "above"),
+        ] {
+            store.add(project, id, &Transcript::new(cwd).user(&format!("words of {id}")));
+        }
+        store.add("-w-a-d", "moved", &Transcript::new("/x").user("start").cwd("/w/a/d").user("moved"));
+        store.add("-y", "shell", &Transcript::new("/y").user("start").cwd("/w/a/e").user("shell"));
+
+        let under = |root: &str| Scope::Under { root: root.into() };
+        assert_eq!(sorted_ids(&store, under("/w/a")), ["below", "moved", "self"]);
+        assert_eq!(sorted_ids(&store, under("/w/a_")), ["below-underscore"], "_ is no wildcard");
+        assert_eq!(sorted_ids(&store, under("/w/a/b")), ["below"]);
+        assert_eq!(sorted_ids(&store, under("/x")), ["moved"], "it started there");
+        assert_eq!(sorted_ids(&store, under("/w")).len(), 7);
+        assert_eq!(sorted_ids(&store, under("/")).len(), 8);
+        assert_eq!(store.lexical(&Filter { scope: under("/w/a"), ..Filter::default() }, "\"words of\"", 10).unwrap().len(), 2);
+
+        for root in ["/", "/w", "/w/a", "/w/a/b", "/w/ab", "/w/a_", "/w/a/d", "/w/a/e", "/x", "/y"] {
+            let here = sorted_ids(&store, Scope::Directory { root: root.into() });
+            let below = sorted_ids(&store, under(root));
+            assert!(here.iter().all(|id| below.contains(id)), "{root}: {here:?} is not in {below:?}");
+        }
     }
 
     fn ids(store: &Store, filter: &Filter) -> Vec<String> {

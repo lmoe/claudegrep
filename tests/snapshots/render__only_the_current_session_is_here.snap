@@ -6,4 +6,4 @@ expression: "render::search(&view)"
 
 *0 matches in 0 sessions, `/home/dev/app`*
 
-*(the only session started here is the current one, which search skips; `claudegrep --all search` covers every project)*
+*(the only session in `/home/dev/app` is the current one, which search skips; `claudegrep --all search` covers every project)*

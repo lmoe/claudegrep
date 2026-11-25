@@ -509,6 +509,115 @@ fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
     assert!(from_src.contains("Tests from src") && from_src.contains("Changelog"), "{from_src}");
 }
 
+/// Sessions in `app`, in `app/sub` and in `apple`, whose name starts with `app`, all in the returned directory.
+fn app_and_a_neighbour() -> (Fixture, PathBuf) {
+    let fixture = Fixture::new();
+    for (name, id, title) in [("app", TOKEN, "Session in app"), ("app/sub", NOTES, "Session in sub"), ("apple", CI, "Session in apple")] {
+        let dir = fixture.dir(name);
+        let transcript =
+            Transcript::new(dir.to_str().unwrap()).user(&format!("Work in {name}")).assistant("m1", vec![text("Done.")]).ai_title(title);
+        fixture.session(&dir, id, &transcript);
+    }
+    let work = fixture.dir("app").parent().unwrap().to_path_buf();
+    (fixture, work)
+}
+
+#[test]
+fn under_lists_a_directory_and_those_below_it_but_not_a_neighbour_that_shares_its_prefix() {
+    let (fixture, work) = app_and_a_neighbour();
+    let relative = fixture.run_in(&work, &["--under", "app", "list"]).success();
+    assert_snapshot!(relative);
+    let trailing_slash = format!("{}/", work.join("app").display());
+    let absolute = fixture.run_in(&fixture.dir("elsewhere"), &["list", "--under", &trailing_slash]).success();
+    assert_eq!(absolute, relative);
+}
+
+#[test]
+fn read_under_a_directory_needs_no_all_and_its_hints_keep_the_scope() {
+    let (fixture, work) = app_and_a_neighbour();
+    let apple = work.join("apple");
+    let outline = fixture.run_in(&apple, &["--under", "../app", "read", "aaaa2222", "--outline"]).success();
+    assert!(outline.contains("`claudegrep --under [ROOT]/work/app read aaaa2222 --from N`"), "{outline}");
+    assert_snapshot!(fixture.run_in(&apple, &["--under", "../app", "read", "bbbb3333"]).failure());
+}
+
+#[cfg(unix)]
+#[test]
+fn under_a_deleted_directory_behind_a_symbolic_link_finds_its_archived_sessions() {
+    let fixture = Fixture::new();
+    let old = fixture.dir("data/real/old");
+    let transcript =
+        Transcript::new(old.to_str().unwrap()).user("Work in old").assistant("m1", vec![text("Done.")]).ai_title("Old project");
+    fixture.session(&old, TOKEN, &transcript);
+    let work = old.parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+    std::os::unix::fs::symlink(work.join("data/real"), work.join("link")).unwrap();
+    fixture.run_in(&work, &["--all", "list"]).success();
+    fs::remove_dir(&old).unwrap();
+
+    let listed = fixture.run_in(&work, &["--under", "link/old/", "list"]).success();
+    assert!(listed.contains("Old project"), "{listed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_deleted_current_directory_needs_an_absolute_under_or_all() {
+    let (fixture, work) = app_and_a_neighbour();
+    let app = work.join("app");
+    for args in [&["--under", app.to_str().unwrap(), "list"][..], &["--all", "list"]] {
+        let listed = fixture.run_in_deleted(&fixture.dir("gone"), args).success();
+        assert!(listed.contains("Session in app"), "{args:?}: {listed}");
+    }
+    for args in [&["list"][..], &["--under", "app", "list"]] {
+        let error = fixture.run_in_deleted(&fixture.dir("gone"), args).failure();
+        assert!(
+            error.starts_with(
+                "claudegrep: cannot read the current directory, which may have been deleted; --all and an absolute --under \
+                 DIR work without it: "
+            ),
+            "{args:?}: {error}"
+        );
+    }
+}
+
+#[test]
+fn search_under_a_directory_names_it_when_the_only_session_there_is_the_current_one() {
+    let (fixture, work) = app_and_a_neighbour();
+    let run = fixture.run_with_model(&work, &["--under", "app/sub", "search", "work"], &[("CLAUDE_CODE_SESSION_ID", NOTES)]);
+    let found = run.success();
+    assert!(found.contains("*(the only session in `[ROOT]/work/app/sub` and below is the current one, which search skips;"), "{found}");
+}
+
+#[test]
+fn under_and_all_together_are_rejected() {
+    let (fixture, work) = app_and_a_neighbour();
+    for args in [&["--all", "--under", "app", "list"][..], &["--all", "list", "--under", "app"], &["--under", "app", "list", "--all"]] {
+        let error = fixture.run_in(&work, args).usage_error();
+        assert!(error.starts_with("error: the argument '--all' cannot be used with '--under <DIR>'\n"), "{args:?}: {error}");
+    }
+}
+
+#[test]
+fn a_second_under_is_rejected_also_on_the_other_side_of_the_subcommand() {
+    let (fixture, work) = app_and_a_neighbour();
+    let twice = [
+        &["--under", "app", "--under", "apple", "list"][..],
+        &["--under", "app", "list", "--under", "apple"],
+        &["--under=app", "search", "work", "--under", "apple"],
+    ];
+    for args in twice {
+        let error = fixture.run_in(&work, args).usage_error();
+        assert!(error.starts_with("error: the argument '--under <DIR>' cannot be used multiple times\n"), "{args:?}: {error}");
+    }
+}
+
+#[test]
+fn search_under_a_directory_keeps_the_scope_in_its_read_commands() {
+    let (fixture, work) = app_and_a_neighbour();
+    let found = fixture.run_with_model(&work, &["--under", "app", "work"], &[]).success();
+    assert!(found.contains("Session in app") && found.contains("Session in sub") && !found.contains("Session in apple"), "{found}");
+    assert!(found.contains("`claudegrep --under [ROOT]/work/app read "), "{found}");
+}
+
 #[test]
 fn help_texts_are_stable() {
     let project = Project::new();

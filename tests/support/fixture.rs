@@ -90,10 +90,25 @@ impl Fixture {
     }
 
     pub fn run_with_env(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Run {
-        let home = self.home();
         let mut command = self.command(cwd, args);
-        command.env("HOME", &home).env("XDG_CACHE_HOME", home.join(".cache"));
+        self.isolate_home(&mut command);
         self.finish(command, env)
+    }
+
+    /// Runs claudegrep in `dir` after `dir` is deleted. `sh` deletes it while it is the current directory, and then
+    /// runs claudegrep there.
+    #[cfg(unix)]
+    pub fn run_in_deleted(&self, dir: &Path, args: &[&str]) -> Run {
+        let mut command = Command::new("sh");
+        command.args(["-c", r#"rmdir "$PWD" && exec "$0" "$@""#, env!("CARGO_BIN_EXE_claudegrep")]).args(args);
+        self.isolate(&mut command, dir);
+        self.isolate_home(&mut command);
+        self.finish(command, &[])
+    }
+
+    fn isolate_home(&self, command: &mut Command) {
+        let home = self.home();
+        command.env("HOME", &home).env("XDG_CACHE_HOME", home.join(".cache"));
     }
 
     /// The model and ONNX Runtime come from the real caches (`~/.cache/huggingface`, `~/.cache/claudegrep`), which a
@@ -106,8 +121,13 @@ impl Fixture {
 
     fn command(&self, cwd: &Path, args: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_claudegrep"));
+        command.args(args);
+        self.isolate(&mut command, cwd);
         command
-            .args(args)
+    }
+
+    fn isolate(&self, command: &mut Command, cwd: &Path) {
+        command
             .current_dir(cwd)
             .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("CLAUDE_CONFIG_DIR")
@@ -115,7 +135,6 @@ impl Fixture {
             .env("TZ", "UTC")
             .env("XDG_DATA_HOME", self.root.join("home/.local/share"))
             .env("CLAUDEGREP_DB", self.root.join("db.sqlite"));
-        command
     }
 
     fn finish(&self, mut command: Command, env: &[(&str, &str)]) -> Run {

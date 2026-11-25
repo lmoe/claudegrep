@@ -27,6 +27,9 @@ fn main() {
         ("sessions_in_all_projects", sessions_in_all_projects),
         ("no_sessions_in_a_directory", no_sessions_in_a_directory),
         ("no_sessions_anywhere", no_sessions_anywhere),
+        ("sessions_under_a_directory", sessions_under_a_directory),
+        ("matches_under_a_directory", matches_under_a_directory),
+        ("no_sessions_under_a_directory", no_sessions_under_a_directory),
         ("forgotten_session", forgotten_session),
     ];
     for (name, case) in cases {
@@ -38,6 +41,10 @@ fn main() {
 
 fn directory() -> Scope {
     Scope::Directory { root: "/home/dev/app".into() }
+}
+
+fn under() -> Scope {
+    Scope::Under { root: "/home/dev".into() }
 }
 
 fn session(id: &str, title: &str, turns: usize, archived: bool) -> SessionRow {
@@ -151,6 +158,18 @@ fn sessions_in_a_directory() {
 
 fn sessions_in_all_projects() {
     assert_snapshot!(render::list(&list(Scope::All, sessions(), None)));
+}
+
+fn sessions_under_a_directory() {
+    assert_snapshot!(render::list(&list(under(), sessions(), None)));
+}
+
+fn matches_under_a_directory() {
+    assert_snapshot!(render::search(&view(under(), "token refresh", vec![token_session()])));
+}
+
+fn no_sessions_under_a_directory() {
+    assert_snapshot!(render::list(&list(under(), Vec::new(), None)));
 }
 
 fn no_sessions_in_a_directory() {

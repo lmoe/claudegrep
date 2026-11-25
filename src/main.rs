@@ -2,12 +2,11 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::Parser;
 
 use claudegrep::cli::Cli;
 
 fn main() -> ExitCode {
-    match claudegrep::app::run(Cli::parse()).and_then(|output| print(&output)) {
+    match claudegrep::app::run(Cli::parse_arguments()).and_then(|output| print(&output)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("claudegrep: {error:#}");
