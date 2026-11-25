@@ -406,9 +406,11 @@ mod tests {
     fn under_a_directory_that_is_gone_keeps_an_absolute_resolved_path() {
         let dir = tempfile::TempDir::new().unwrap();
         let base = dir.path().canonicalize().unwrap();
-        assert_eq!(under("gone/", &base), base.join("gone"));
-        assert_eq!(under("./gone/../also-gone/.", &base), base.join("also-gone"));
-        assert_eq!(under("/w/gone/", &base), Path::new("/w/gone"));
+        // A `Path` compares equal with and without a trailing slash, but the store compares the text.
+        let text = |dir: &str| under(dir, &base).into_os_string().into_string().unwrap();
+        assert_eq!(text("gone/"), format!("{}/gone", base.display()));
+        assert_eq!(text("./gone/../also-gone/."), format!("{}/also-gone", base.display()));
+        assert_eq!(text("/w/gone/"), "/w/gone");
     }
 
     #[cfg(unix)]
