@@ -597,6 +597,20 @@ fn under_and_all_together_are_rejected() {
 }
 
 #[test]
+fn a_second_under_is_rejected_also_on_the_other_side_of_the_subcommand() {
+    let (fixture, work) = app_and_a_neighbour();
+    let twice = [
+        &["--under", "app", "--under", "apple", "list"][..],
+        &["--under", "app", "list", "--under", "apple"],
+        &["--under=app", "search", "work", "--under", "apple"],
+    ];
+    for args in twice {
+        let error = fixture.run_in(&work, args).usage_error();
+        assert!(error.starts_with("error: the argument '--under <DIR>' cannot be used multiple times\n"), "{args:?}: {error}");
+    }
+}
+
+#[test]
 fn search_under_a_directory_keeps_the_scope_in_its_read_commands() {
     let (fixture, work) = app_and_a_neighbour();
     let found = fixture.run_with_model(&work, &["--under", "app", "work"], &[]).success();

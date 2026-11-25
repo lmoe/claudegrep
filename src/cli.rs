@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::error::ErrorKind;
@@ -196,10 +197,14 @@ pub struct Global {
 }
 
 impl Cli {
-    /// Parses the arguments like `Parser::parse`. It also rejects `--all` with `--under`: clap's `conflicts_with` misses
-    /// the two when one stands before the subcommand and the other after it.
+    /// Parses the arguments like `Parser::parse`. It also rejects a second `--under`, and `--all` with `--under`. clap
+    /// misses both when one stands before the subcommand and the other after it: the value after the subcommand replaces
+    /// the one before it.
     pub fn parse_arguments() -> Self {
         let cli = Self::parse();
+        if under_count(std::env::args_os()) > 1 {
+            Self::command().error(ErrorKind::ArgumentConflict, "the argument '--under <DIR>' cannot be used multiple times").exit();
+        }
         if cli.all && cli.under.is_some() {
             Self::command().error(ErrorKind::ArgumentConflict, "the argument '--all' cannot be used with '--under <DIR>'").exit();
         }
@@ -216,9 +221,31 @@ impl Cli {
     }
 }
 
+/// How often `args` give `--under`. After `--` every argument is a word of the query.
+fn under_count(args: impl IntoIterator<Item = OsString>) -> usize {
+    args.into_iter().take_while(|arg| arg != "--").filter(|arg| arg == "--under" || arg.to_string_lossy().starts_with("--under=")).count()
+}
+
 fn positive(value: &str) -> Result<usize, String> {
     match value.parse::<usize>() {
         Ok(n) if n > 0 => Ok(n),
         _ => Err("expected a positive number".to_owned()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn count(args: &[&str]) -> usize {
+        under_count(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn under_is_counted_in_both_forms_and_not_after_a_double_dash() {
+        assert_eq!(count(&["claudegrep", "--under", "a", "list"]), 1);
+        assert_eq!(count(&["claudegrep", "--under=a", "list", "--under", "b"]), 2);
+        assert_eq!(count(&["claudegrep", "search", "--under", "a", "--", "--under", "--under=b"]), 1);
+        assert_eq!(count(&["claudegrep", "search", "under", "--underline"]), 0);
     }
 }
