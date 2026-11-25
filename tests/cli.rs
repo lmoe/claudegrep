@@ -447,6 +447,26 @@ fn a_transcript_moved_after_it_was_indexed_is_one_session() {
 }
 
 #[test]
+fn a_transcript_moved_after_it_was_indexed_without_new_entries_is_listed_where_it_moved_to() {
+    let fixture = Fixture::new();
+    let (start, moved) = (fixture.dir("start"), fixture.dir("moved"));
+    // The entries after `/cd` were written before the move was indexed, so the moved file is the same as the archived one.
+    let transcript = Transcript::new(start.to_str().unwrap())
+        .user("Plan the parser rewrite")
+        .assistant("m1", vec![text("First split the lexer from the parser.")])
+        .cwd(moved.to_str().unwrap())
+        .user("Now write the lexer")
+        .ai_title("Parser rewrite");
+    fixture.session(&start, MOVED, &transcript);
+    fixture.run_in(&start, &["list"]).success();
+
+    fixture.move_session(&start, &moved, MOVED);
+    let unlisted: Vec<_> =
+        [&start, &moved].into_iter().filter(|dir| !fixture.run_in(dir, &["list"]).success().contains("Parser rewrite")).collect();
+    assert!(unlisted.is_empty(), "the session is not listed in {unlisted:?}");
+}
+
+#[test]
 fn a_shell_cd_to_a_directory_with_the_same_encoded_name_adds_no_directory() {
     let fixture = Fixture::new();
     // `a.b`, `a-b` and `a/b` share one project directory.

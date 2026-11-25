@@ -564,6 +564,23 @@ mod tests {
     }
 
     #[test]
+    fn a_smaller_archived_copy_at_the_new_path_gives_way_to_the_moved_one() {
+        let mut indexed = Indexed::new();
+        let copy = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&copy).unwrap();
+        let whole = fs::read_to_string(indexed.main_transcript()).unwrap();
+        fs::write(copy.join("s1.jsonl"), whole.lines().next().unwrap()).unwrap();
+        let both = [indexed.project.clone(), copy];
+        refresh(&mut indexed.store, &both).unwrap();
+
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!(only_session(&indexed.store).path, "-q/s1.jsonl");
+        let kept = load_session(&indexed.store, "-q/s1.jsonl", "s1").unwrap();
+        assert!(kept.turns.iter().any(|turn| matches!(turn, Turn::Assistant(_))), "the larger archived copy stays");
+    }
+
+    #[test]
     fn a_moved_transcript_that_is_shorter_than_its_archived_copy_keeps_the_copy() {
         let mut indexed = Indexed::new();
         let moved = move_to_q(&indexed.project);
