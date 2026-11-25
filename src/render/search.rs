@@ -38,7 +38,7 @@ impl Display for SearchView {
             write!(f, "{}", Group { rank: rank + 1, group, scope })?;
         }
         if total > 0 {
-            write!(f, "{}", ReadingMore { command: invocation(scope), limit: self.limit })
+            write!(f, "{}", ReadingMore { command: &invocation(scope), limit: self.limit })
         } else if self.only_current {
             write!(f, "\n{ONLY_CURRENT}")
         } else {
@@ -70,7 +70,7 @@ impl Display for Group<'_> {
         let command = invocation(self.scope);
         for hit in hits {
             for index in hit.range.clone() {
-                write!(f, "{}", Passage { group: self.group, index, hit, command })?;
+                write!(f, "{}", Passage { group: self.group, index, hit, command: &command })?;
             }
         }
         Ok(())

@@ -40,7 +40,7 @@ impl<'a> Meta<'a> {
     }
 
     pub fn marks(&self, scope: &Scope) -> Marks<'a> {
-        Marks { cwd: scope.is_all().then(|| self.session.cwd.as_deref().unwrap_or("?")), archived: self.archived }
+        Marks { cwd: (!scope.is_one_directory()).then(|| self.session.cwd.as_deref().unwrap_or("?")), archived: self.archived }
     }
 }
 
@@ -633,11 +633,12 @@ mod tests {
     }
 
     #[test]
-    fn marks_name_the_directory_only_for_all_projects() {
+    fn marks_name_the_directory_unless_the_scope_is_one_directory() {
         let directory = Scope::Directory { root: "/p".into() };
         let (here, archived, unknown) = (row(Some("/p"), false), row(Some("/p"), true), row(None, true));
         assert_eq!(Meta::from(&here).marks(&directory).to_string(), "");
         assert_eq!(Meta::from(&here).marks(&Scope::All).to_string(), " · `/p`");
+        assert_eq!(Meta::from(&here).marks(&Scope::Under { root: "/".into() }).to_string(), " · `/p`");
         assert_eq!(Meta::from(&archived).marks(&directory).to_string(), " · *archived*");
         assert_eq!(Meta::from(&unknown).marks(&Scope::All).to_string(), " · `?` · *archived*");
     }

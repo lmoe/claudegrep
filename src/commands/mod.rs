@@ -47,8 +47,9 @@ fn resolve_session(store: &Store, filter: &Filter, reference: &str) -> Result<Se
         [one] => Ok((*one).clone()),
         [] if !filter.scope.is_all() => {
             bail!(
-                "no session {reference} in {}; see `claudegrep list`, or pass --all for other projects",
-                render::scope_name(&filter.scope)
+                "no session {reference} in {}; see `{} list`, or pass --all for other projects",
+                render::scope_name(&filter.scope),
+                render::invocation(&filter.scope)
             )
         }
         [] => bail!("no session {reference}; see `claudegrep --all list`"),
@@ -110,6 +111,11 @@ mod tests {
         assert_eq!(
             resolve_session(&store, &directory, "zz").unwrap_err().to_string(),
             "no session zz in `/p`; see `claudegrep list`, or pass --all for other projects"
+        );
+        let under = Filter { scope: Scope::Under { root: "/q".into() }, ..Filter::default() };
+        assert_eq!(
+            resolve_session(&store, &under, "1234a").unwrap_err().to_string(),
+            "no session 1234a in `/q` and below; see `claudegrep --under /q list`, or pass --all for other projects"
         );
     }
 }

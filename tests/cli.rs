@@ -509,6 +509,55 @@ fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
     assert!(from_src.contains("Tests from src") && from_src.contains("Changelog"), "{from_src}");
 }
 
+/// Sessions in `app`, in `app/sub` and in `apple`, whose name starts with `app`, all in the returned directory.
+fn app_and_a_neighbour() -> (Fixture, PathBuf) {
+    let fixture = Fixture::new();
+    for (name, id, title) in [("app", TOKEN, "Session in app"), ("app/sub", NOTES, "Session in sub"), ("apple", CI, "Session in apple")] {
+        let dir = fixture.dir(name);
+        let transcript =
+            Transcript::new(dir.to_str().unwrap()).user(&format!("Work in {name}")).assistant("m1", vec![text("Done.")]).ai_title(title);
+        fixture.session(&dir, id, &transcript);
+    }
+    let work = fixture.dir("app").parent().unwrap().to_path_buf();
+    (fixture, work)
+}
+
+#[test]
+fn under_lists_a_directory_and_those_below_it_but_not_a_neighbour_that_shares_its_prefix() {
+    let (fixture, work) = app_and_a_neighbour();
+    let relative = fixture.run_in(&work, &["--under", "app", "list"]).success();
+    assert_snapshot!(relative);
+    let trailing_slash = format!("{}/", work.join("app").display());
+    let absolute = fixture.run_in(&fixture.dir("elsewhere"), &["list", "--under", &trailing_slash]).success();
+    assert_eq!(absolute, relative);
+}
+
+#[test]
+fn read_under_a_directory_needs_no_all_and_its_hints_keep_the_scope() {
+    let (fixture, work) = app_and_a_neighbour();
+    let apple = work.join("apple");
+    let outline = fixture.run_in(&apple, &["--under", "../app", "read", "aaaa2222", "--outline"]).success();
+    assert!(outline.contains("`claudegrep --under [ROOT]/work/app read aaaa2222 --from N`"), "{outline}");
+    assert_snapshot!(fixture.run_in(&apple, &["--under", "../app", "read", "bbbb3333"]).failure());
+}
+
+#[test]
+fn under_and_all_together_are_rejected() {
+    let (fixture, work) = app_and_a_neighbour();
+    for args in [&["--all", "--under", "app", "list"][..], &["--all", "list", "--under", "app"], &["--under", "app", "list", "--all"]] {
+        let error = fixture.run_in(&work, args).usage_error();
+        assert!(error.starts_with("error: the argument '--all' cannot be used with '--under <DIR>'\n"), "{args:?}: {error}");
+    }
+}
+
+#[test]
+fn search_under_a_directory_keeps_the_scope_in_its_read_commands() {
+    let (fixture, work) = app_and_a_neighbour();
+    let found = fixture.run_with_model(&work, &["--under", "app", "work"], &[]).success();
+    assert!(found.contains("Session in app") && found.contains("Session in sub") && !found.contains("Session in apple"), "{found}");
+    assert!(found.contains("`claudegrep --under [ROOT]/work/app read "), "{found}");
+}
+
 #[test]
 fn help_texts_are_stable() {
     let project = Project::new();

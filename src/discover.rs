@@ -1,5 +1,5 @@
 use std::fs::{self, Metadata};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use anyhow::{Context, Result, bail};
@@ -144,28 +144,56 @@ pub fn names_project_dir(dir: &str, project_dir: &str) -> bool {
 pub enum Scope {
     #[default]
     All,
-    Directory {
-        root: PathBuf,
-    },
+    /// The sessions in `root`, see `session_dirs`.
+    Directory { root: PathBuf },
+    /// The sessions in `root` and in every directory below it.
+    Under { root: PathBuf },
 }
 
 impl Scope {
     pub fn candidates(cwd: &Path) -> Vec<Self> {
-        let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+        let cwd = resolve(cwd);
         let git_root = git_root(&cwd).filter(|root| *root != cwd);
         std::iter::once(cwd).chain(git_root).map(|root| Self::Directory { root }).collect()
+    }
+
+    /// The sessions in `dir` and below it. A relative `dir` starts at `cwd`.
+    pub fn under(dir: &Path, cwd: &Path) -> Self {
+        Self::Under { root: resolve(&cwd.join(dir)) }
     }
 
     pub fn root(&self) -> Option<&Path> {
         match self {
             Self::All => None,
-            Self::Directory { root } => Some(root),
+            Self::Directory { root } | Self::Under { root } => Some(root),
         }
     }
 
     pub const fn is_all(&self) -> bool {
         matches!(self, Self::All)
     }
+
+    pub const fn is_one_directory(&self) -> bool {
+        matches!(self, Self::Directory { .. })
+    }
+}
+
+/// `dir` with symbolic links, `.` and `..` resolved. A directory that does not exist, such as a deleted project whose
+/// sessions are archived, has only its `.` and `..` resolved, and loses a trailing slash.
+fn resolve(dir: &Path) -> PathBuf {
+    dir.canonicalize().unwrap_or_else(|_| {
+        let mut resolved = PathBuf::new();
+        for part in dir.components() {
+            match part {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    resolved.pop();
+                }
+                part => resolved.push(part),
+            }
+        }
+        resolved
+    })
 }
 
 pub fn project_dirs(projects_root: &Path) -> Result<Vec<PathBuf>> {
@@ -343,6 +371,53 @@ mod tests {
         assert_eq!(Scope::All.root(), None);
         let directory = Scope::Directory { root: "/p".into() };
         assert!(!directory.is_all());
+    }
+
+    #[test]
+    fn only_a_directory_scope_is_one_directory() {
+        assert!(Scope::Directory { root: "/p".into() }.is_one_directory());
+        assert!(!Scope::Under { root: "/p".into() }.is_one_directory());
+        assert!(!Scope::All.is_one_directory());
+        assert_eq!(Scope::Under { root: "/p".into() }.root(), Some(Path::new("/p")));
+    }
+
+    fn under(dir: &str, cwd: &Path) -> PathBuf {
+        Scope::under(Path::new(dir), cwd).root().unwrap().to_path_buf()
+    }
+
+    #[test]
+    fn under_resolves_its_directory_like_the_candidates_do() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let real = dir.path().canonicalize().unwrap().join("real");
+        let sub = real.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        let absolute = real.to_str().unwrap();
+        assert_eq!(under(absolute, &sub), real);
+        assert_eq!(under(&format!("{absolute}/"), &sub), real, "a trailing slash");
+        assert_eq!(under("..", &sub), real, "relative to the current directory");
+        assert_eq!(under("sub/../.", &real), real, "dot segments");
+        assert_eq!(Scope::candidates(&sub.join(".."))[0].root(), Some(real.as_path()));
+    }
+
+    #[test]
+    fn under_a_directory_that_is_gone_keeps_an_absolute_resolved_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        assert_eq!(under("gone/", &base), base.join("gone"));
+        assert_eq!(under("./gone/../also-gone/.", &base), base.join("also-gone"));
+        assert_eq!(under("/w/gone/", &base), Path::new("/w/gone"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn under_resolves_a_symbolic_link() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let real = dir.path().canonicalize().unwrap().join("real");
+        fs::create_dir_all(&real).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(under(link.to_str().unwrap(), dir.path()), real);
+        assert_eq!(Scope::candidates(&link)[0].root(), Some(real.as_path()));
     }
 
     #[test]

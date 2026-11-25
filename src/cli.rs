@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::error::ErrorKind;
+use clap::{Args, CommandFactory, Parser, Subcommand};
 
 use crate::render::Position;
 use crate::when::When;
@@ -14,7 +15,8 @@ into the current one.
 SCOPE
   By default only the sessions of exactly the current directory are listed, read and searched. \
 A session is in the directory it started in and in the directory its last /cd went to. \
-Subdirectories and other projects need --all. Every project is indexed either way, \
+--under DIR covers DIR and every directory below it, and --all covers every project. \
+Every project is indexed either way, \
 and claudegrep keeps its own compressed copy of every transcript, so sessions stay readable \
 after Claude Code deletes old transcripts (cleanupPeriodDays, 30 days by default).
 
@@ -58,6 +60,9 @@ pub struct Cli {
 
     #[arg(long, global = true, help = "Use every project's sessions, not only those of the current directory")]
     all: bool,
+
+    #[arg(long, global = true, value_name = "DIR", help = "Use the sessions of DIR and of every directory below it")]
+    under: Option<PathBuf>,
 
     #[arg(
         long,
@@ -184,19 +189,30 @@ pub struct ConfigArgs {
 
 pub struct Global {
     pub all: bool,
+    pub under: Option<PathBuf>,
     pub since: Option<When>,
     pub until: Option<When>,
     pub db: Option<PathBuf>,
 }
 
 impl Cli {
+    /// Parses the arguments like `Parser::parse`. It also rejects `--all` with `--under`: clap's `conflicts_with` misses
+    /// the two when one stands before the subcommand and the other after it.
+    pub fn parse_arguments() -> Self {
+        let cli = Self::parse();
+        if cli.all && cli.under.is_some() {
+            Self::command().error(ErrorKind::ArgumentConflict, "the argument '--all' cannot be used with '--under <DIR>'").exit();
+        }
+        cli
+    }
+
     pub fn into_command(self) -> (Command, Global) {
         let command = match self.command {
             Some(command) => command,
             None if self.query.is_empty() => Command::List,
             None => Command::Search { query: self.query, options: self.search },
         };
-        (command, Global { all: self.all, since: self.since, until: self.until, db: self.db })
+        (command, Global { all: self.all, under: self.under, since: self.since, until: self.until, db: self.db })
     }
 }
 

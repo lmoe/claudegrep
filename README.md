@@ -42,11 +42,12 @@ Claude uses the tool once it knows that it exists and when to reach for it. Add 
 
 `claudegrep` searches, lists and reads the transcripts of earlier Claude Code sessions, including ones Claude Code has already deleted. Use it before asking me or starting over whenever I point at earlier work ("like last time", "the fix from yesterday", "what did we decide about X"), or when an earlier session probably settled what you are about to work out again.
 
-It sees the sessions started in the current directory and the sessions whose last `/cd` went there. When the directory has none, it sees those of its git root. `--all` widens that to every project and goes before or after the subcommand. A session is named by the 8-character id that output prints, or by its number in `list`. Reading a session from another project needs `--all` too.
+It sees the sessions started in the current directory and the sessions whose last `/cd` went there. When the directory has none, it sees those of its git root. `--under DIR` widens that to DIR and every directory below it, and `--all` to every project. Both go before or after the subcommand. A session is named by the 8-character id that output prints, or by its number in `list`. Reading a session from another project needs the same `--all` or `--under DIR`.
 
 - `claudegrep "token refresh bug"`: search this project. Meaning and exact words both count, results are grouped by session, and every match comes with the `read --from` command that opens it.
 - `claudegrep search status`: the same search, written out. A query that is one of the words `list`, `read`, `search`, `index`, `status`, `config`, `forget` or `help` runs that command, so it needs this form.
 - `claudegrep --all "token refresh bug"`: the same over every project.
+- `claudegrep --under ~/work "token refresh bug"`: the same over the sessions in `~/work` and in every directory below it.
 - `claudegrep -n 3 -C 1 "token refresh"`: at most 3 matches, each with one passage before and after it.
 - `claudegrep --since 2w "docker build"`: only sessions active in the last two weeks. `--until` is the other end. Both take a date (`2026-10-14`) or an age (`30m`, `6h`, `2d`, `1w`, `3mo`).
 - `claudegrep list`: this project's sessions, newest first.
@@ -58,6 +59,8 @@ It sees the sessions started in the current directory and the sessions whose las
 
 Pick the turns worth reading from a search or the outline before paging through a whole session. `claudegrep --all list` prints every session there is, so search instead. Search skips the session it runs in. Never run `claudegrep forget`: it deletes an archived session for good.
 ```
+
+Some projects belong together, such as several clones of one repository in one directory. A `CLAUDE.md` in that directory can tell Claude to add `--under` with the directory, so that each project there sees the sessions of all of them.
 
 No permission rule is needed. Auto mode runs these commands without asking, and the default mode asks once per repository and can remember the answer. A deny rule for `Bash(claudegrep forget:*)` in `~/.claude/settings.json` backs up the section's last sentence.
 
