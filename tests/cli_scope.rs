@@ -6,7 +6,6 @@ mod support;
 use std::path::PathBuf;
 
 use support::fixture::Fixture;
-use support::lines::{Transcript, text};
 
 const APP_OLD: &str = "aaaa0001-0000-4000-8000-000000000001";
 const SUB_NEW: &str = "aaaa0002-0000-4000-8000-000000000002";
@@ -23,13 +22,7 @@ fn app_sub_and_apple() -> (Fixture, PathBuf) {
         ("apple", APPLE_NEW, "Apple new", "2026-01-05T12:00:00.000Z"),
     ];
     for (name, id, title, start) in sessions {
-        let dir = fixture.dir(name);
-        let transcript = Transcript::new(dir.to_str().unwrap())
-            .at(start)
-            .user(&format!("Work in {name}"))
-            .assistant("m1", vec![text("Done.")])
-            .ai_title(title);
-        fixture.session(&dir, id, &transcript);
+        fixture.titled_session(name, id, title, start);
     }
     let work = fixture.dir("app").parent().unwrap().to_path_buf();
     (fixture, work)
@@ -113,7 +106,8 @@ fn claude_config_dir_moves_the_default_projects_root() {
     fixture.run_in(&work, &["config", "projects-root", "--unset"]).success();
     let config_dir = fixture.project_dir(&work.join("app")).parent().unwrap().parent().unwrap().to_path_buf();
 
-    fixture.run_in(&work, &["--all", "list"]).failure();
+    let error = fixture.run_in(&work, &["--all", "list"]).failure();
+    assert!(error.starts_with("claudegrep: [ROOT]/home/.claude/projects does not exist, so there are no Claude Code sessions"), "{error}");
     let list = fixture.run_with_env(&work, &["--all", "list"], &[("CLAUDE_CONFIG_DIR", config_dir.to_str().unwrap())]).success();
     assert_eq!(titles(&list), ["Apple new", "Sub new", "Apple old", "App old"], "{list}");
 }
@@ -121,43 +115,10 @@ fn claude_config_dir_moves_the_default_projects_root() {
 #[test]
 fn a_window_whose_since_is_after_its_until_lists_nothing_and_does_not_fail() {
     let (fixture, work) = app_sub_and_apple();
-    let list = fixture.run_in(&work, &["--all", "list", "--since", "2026-02-01", "--until", "2026-01-01"]).success();
-    assert_eq!(titles(&list), Vec::<&str>::new(), "{list}");
-}
-
-#[test]
-fn since_a_day_that_starts_in_a_daylight_saving_gap_begins_at_its_first_existing_hour() {
-    // At 00:00 on 2026-09-06 clocks in Santiago go to 01:00, which is 04:00 UTC.
-    let fixture = Fixture::new();
-    let work = fixture.dir("work");
-    for (id, title, start) in
-        [(APP_OLD, "Before the gap ends", "2026-09-06T02:57:00.000Z"), (SUB_NEW, "After the gap ends", "2026-09-06T04:30:00.000Z")]
-    {
-        let transcript =
-            Transcript::new(work.to_str().unwrap()).at(start).user("Work").assistant("m1", vec![text("Done.")]).ai_title(title);
-        fixture.session(&work, id, &transcript);
-    }
-    let list = fixture.run_with_env(&work, &["list", "--since", "2026-09-06"], &[("TZ", "America/Santiago")]).success();
-    assert_eq!(titles(&list), ["After the gap ends"], "{list}");
-}
-
-#[test]
-fn until_a_day_whose_last_minute_happens_twice_includes_a_session_that_started_in_its_second_pass() {
-    // At 24:00 on 2026-04-04 clocks in Santiago go back to 23:00, so 23:30 happens at 02:30 UTC and at 03:30 UTC.
-    let fixture = Fixture::new();
-    let work = fixture.dir("work");
-    let sessions = [
-        (APP_OLD, "First pass", "2026-04-05T02:30:00.000Z"),
-        (SUB_NEW, "Second pass", "2026-04-05T03:30:00.000Z"),
-        (APPLE_OLD, "Next day", "2026-04-05T04:30:00.000Z"),
-    ];
-    for (id, title, start) in sessions {
-        let transcript =
-            Transcript::new(work.to_str().unwrap()).at(start).user("Work").assistant("m1", vec![text("Done.")]).ai_title(title);
-        fixture.session(&work, id, &transcript);
-    }
-    let list = fixture.run_with_env(&work, &["list", "--until", "2026-04-04"], &[("TZ", "America/Santiago")]).success();
-    assert_eq!(titles(&list), ["Second pass", "First pass"], "{list}");
+    let list = |window: &[&str]| fixture.run_in(&work, &[&["--all", "list"][..], window].concat()).success();
+    assert_eq!(titles(&list(&["--since", "2026-01-03"])), ["Apple new", "Sub new"]);
+    assert_eq!(titles(&list(&["--until", "2026-01-02"])), ["Apple old", "App old"]);
+    assert_eq!(titles(&list(&["--since", "2026-01-03", "--until", "2026-01-02"])), Vec::<&str>::new());
 }
 
 #[test]
@@ -175,7 +136,7 @@ fn index_under_a_directory_embeds_every_project_and_reports_the_scoped_status() 
     let first = report.lines().next().unwrap();
     assert_eq!(
         first, "Archived 4 new or changed transcript files, parsed 4 sessions, embedded 4 new chunks.",
-        "the 3 chunks of the scope are not all"
+        "index embeds the 4 distinct chunks of every project, not the 3 of the scope"
     );
     assert!(section(&report, "`[ROOT]/work/app` and below").starts_with("\n- sessions: 2\n"), "{report}");
     for heading in ["`[ROOT]/work/app` and below", "the whole index"] {

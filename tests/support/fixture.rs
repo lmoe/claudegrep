@@ -5,7 +5,7 @@ use std::process::{Child, Command, Stdio};
 
 use tempfile::TempDir;
 
-use super::lines::Transcript;
+use super::lines::{Transcript, text};
 
 pub const ROOT: &str = "[ROOT]";
 
@@ -44,6 +44,17 @@ impl Fixture {
         let dir = self.project_dir(cwd);
         fs::create_dir_all(&dir).expect("the project dir is created");
         fs::write(dir.join(format!("{id}.jsonl")), transcript.build()).expect("the transcript is written");
+    }
+
+    /// A session of two turns started at `start` in the work directory `name`, which prompt says "Work in `name`".
+    pub fn titled_session(&self, name: &str, id: &str, title: &str, start: &str) {
+        let dir = self.dir(name);
+        let transcript = Transcript::new(dir.to_str().expect("a UTF-8 path"))
+            .at(start)
+            .user(&format!("Work in {name}"))
+            .assistant("m1", vec![text("Done.")])
+            .ai_title(title);
+        self.session(&dir, id, &transcript);
     }
 
     pub fn agent(&self, cwd: &Path, id: &str, agent: &str, transcript: &Transcript, meta: Option<&str>) {
