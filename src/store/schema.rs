@@ -5,8 +5,22 @@ use super::{get_meta, set_meta};
 
 const SCHEMA_VERSION: &str = "5";
 
-const SCHEMA: &str = "
+/// An older `SCHEMA_VERSION` whose vectors and embedder hold in this one. An upgrade from it parses the archive again but
+/// embeds nothing again. Any other version starts the vectors over.
+const SAME_VECTORS_SCHEMA_VERSION: &str = "4";
+
+/// The vectors and the meta, which names their embedder.
+const EMBEDDED: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE vectors (
+    hash BLOB PRIMARY KEY,
+    tokens INTEGER NOT NULL,
+    data BLOB NOT NULL
+) WITHOUT ROWID;
+";
+
+/// What a refresh parses from the archive.
+const PARSED: &str = "
 CREATE TABLE sessions (
     path TEXT PRIMARY KEY,
     project_dir TEXT NOT NULL,
@@ -40,11 +54,6 @@ CREATE TABLE chunks (
 CREATE INDEX chunks_hash ON chunks (hash);
 CREATE INDEX chunks_key ON chunks (key);
 CREATE VIRTUAL TABLE chunk_fts USING fts5 (text, tokenize = 'trigram');
-CREATE TABLE vectors (
-    hash BLOB PRIMARY KEY,
-    tokens INTEGER NOT NULL,
-    data BLOB NOT NULL
-) WITHOUT ROWID;
 ";
 
 const PERSISTENT: &str = "
@@ -62,7 +71,8 @@ CREATE TABLE IF NOT EXISTS archive (
 CREATE INDEX IF NOT EXISTS archive_parent ON archive (parent);
 ";
 
-/// Creates what `conn` is missing. An index of another `SCHEMA_VERSION` is rebuilt, except the archive and the settings.
+/// Creates what `conn` is missing. An index of another `SCHEMA_VERSION` is rebuilt, except the archive and the settings,
+/// and except the vectors of `SAME_VECTORS_SCHEMA_VERSION`.
 pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
     tx.execute_batch(PERSISTENT)?;
@@ -70,10 +80,14 @@ pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
     let version = if has_meta { get_meta(&tx, "schema")? } else { None };
     if version.as_deref() != Some(SCHEMA_VERSION) {
         tx.execute_batch(
-            "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS vectors; DROP TABLE IF EXISTS chunk_fts;
-             DROP TABLE IF EXISTS session_dirs; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS meta;",
+            "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS chunk_fts; DROP TABLE IF EXISTS session_dirs;
+             DROP TABLE IF EXISTS sessions;",
         )?;
-        tx.execute_batch(SCHEMA)?;
+        if version.as_deref() != Some(SAME_VECTORS_SCHEMA_VERSION) {
+            tx.execute_batch("DROP TABLE IF EXISTS vectors; DROP TABLE IF EXISTS meta;")?;
+            tx.execute_batch(EMBEDDED)?;
+        }
+        tx.execute_batch(PARSED)?;
         set_meta(&tx, "schema", SCHEMA_VERSION)?;
     }
     tx.commit()?;

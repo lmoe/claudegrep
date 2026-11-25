@@ -212,7 +212,7 @@ mod tests {
 
     use super::*;
     use crate::discover::Scope;
-    use crate::store::{Filter, SessionRow};
+    use crate::store::{Filter, SessionRow, StoredVector};
     use crate::transcript::Turn;
 
     fn line(kind: &str, ts: &str, extra: &str) -> String {
@@ -518,6 +518,22 @@ mod tests {
         indexed.store = Store::open(&indexed.dir.path().join("index.sqlite")).unwrap();
         assert_eq!(indexed.refresh(), (0, 1), "the archive still holds it, so it is only parsed again");
         assert_eq!(indexed.store.sessions(&in_directory("/p")).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_index_of_schema_4_keeps_its_vectors_and_its_embedder_on_the_upgrade() {
+        let mut indexed = Indexed::new();
+        indexed.store.use_embedder("model").unwrap();
+        let hashes: Vec<_> = indexed.store.pending().unwrap().into_iter().map(|chunk| chunk.hash).collect();
+        let vectors: Vec<_> = hashes.iter().map(|&hash| StoredVector { hash, tokens: 1, data: &[1] }).collect();
+        indexed.store.insert_vectors(&vectors).unwrap();
+        indexed.execute("DROP TABLE session_dirs; UPDATE meta SET value = '4' WHERE key = 'schema';");
+
+        indexed.store = Store::open(&indexed.dir.path().join("index.sqlite")).unwrap();
+        assert_eq!(indexed.refresh(), (0, 1));
+        assert_eq!(indexed.store.embedder().unwrap().as_deref(), Some("model"));
+        assert_eq!(indexed.store.pending().unwrap(), [], "nothing is embedded again");
+        assert_eq!(indexed.store.stats(&Filter::default()).unwrap().embedded, hashes.len());
     }
 
     #[test]
