@@ -67,6 +67,24 @@ impl Fixture {
         fs::remove_file(self.project_dir(cwd).join(format!("{id}.jsonl"))).expect("the transcript is deleted");
     }
 
+    /// Moves a session's transcript and its directory of subagents to the project directory of `to`, as `/cd` does.
+    pub fn move_session(&self, from: &Path, to: &Path, id: &str) {
+        let (old, new) = (self.project_dir(from), self.project_dir(to));
+        fs::create_dir_all(&new).expect("the project dir is created");
+        let file = format!("{id}.jsonl");
+        fs::rename(old.join(&file), new.join(&file)).expect("the transcript is moved");
+        if old.join(id).is_dir() {
+            fs::rename(old.join(id), new.join(id)).expect("the session's directory is moved");
+        }
+    }
+
+    pub fn append(&self, cwd: &Path, id: &str, transcript: &Transcript) {
+        let path = self.project_dir(cwd).join(format!("{id}.jsonl"));
+        let mut content = fs::read_to_string(&path).expect("the transcript is read");
+        content.push_str(&transcript.build());
+        fs::write(path, content).expect("the transcript is written");
+    }
+
     pub fn run_in(&self, cwd: &Path, args: &[&str]) -> Run {
         self.run_with_env(cwd, args, &[])
     }

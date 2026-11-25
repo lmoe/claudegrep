@@ -20,6 +20,7 @@ pub struct Refresh {
 
 pub fn refresh(store: &mut Store, project_dirs: &[PathBuf]) -> Result<Refresh> {
     let files = discover::transcripts(project_dirs)?;
+    follow_moved_transcripts(store, &files)?;
     let stored = archive_changed(store, &files)?;
     let on_disk: HashSet<&str> = files.iter().filter(|file| file.parent.is_none()).map(|file| file.key.as_str()).collect();
     let sessions = store.archived_sessions()?;
@@ -32,6 +33,40 @@ pub fn refresh(store: &mut Store, project_dirs: &[PathBuf]) -> Result<Refresh> {
         reparse(store, &plan.reparse, &on_disk)?;
     }
     Ok(Refresh { stored: stored.len(), parsed: plan.reparse.len() })
+}
+
+/// Moves the archive of each session whose transcript is now at another path to that path. `/cd` moves a transcript and
+/// the directory of its subagents to the project directory of the new directory. Without this, the old path would stay
+/// in the archive as a second session with the same id.
+fn follow_moved_transcripts(store: &mut Store, files: &[DiskFile]) -> Result<()> {
+    let sessions = store.archived_sessions()?;
+    let moved = moved_transcripts(&sessions, files);
+    if moved.is_empty() {
+        return Ok(());
+    }
+    let tx = store.transaction()?;
+    for (archived, file) in moved {
+        tx.move_archive(&archived.path, &file.key, &file.project_dir)?;
+    }
+    tx.commit()
+}
+
+/// The archived sessions whose transcript is gone from its path while exactly one transcript on disk has their id, each
+/// with that transcript. A transcript that Claude Code deleted has no other one with its id, so it stays archived.
+fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFile]) -> Vec<(&'a ArchivedSessionKey, &'a DiskFile)> {
+    let mut by_id: HashMap<&str, Vec<&DiskFile>> = HashMap::new();
+    for file in files.iter().filter(|file| file.parent.is_none()) {
+        by_id.entry(file.session_id.as_str()).or_default().push(file);
+    }
+    let on_disk: HashSet<&str> = files.iter().map(|file| file.key.as_str()).collect();
+    sessions
+        .iter()
+        .filter(|session| !on_disk.contains(session.path.as_str()))
+        .filter_map(|session| match by_id.get(session.session_id.as_str())?.as_slice() {
+            [file] => Some((session, *file)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Archives the files that are new or replace their archived version and returns, for each one stored, the path of the session it belongs to.
@@ -453,6 +488,121 @@ mod tests {
         assert_eq!(indexed.store.parse_state().unwrap()["-p/s1.jsonl"].version, chunk::VERSION, "it is not retried on every run");
         assert_eq!(indexed.refresh(), (0, 0));
         assert_eq!(load_session(&indexed.store, "-p/s1.jsonl", "s1").unwrap_err().to_string(), "the session has no messages");
+    }
+
+    /// Moves `s1` of `project` with its subagents to the project directory `-q` next to it, as `/cd` does.
+    fn move_to_q(project: &Path) -> PathBuf {
+        let moved = project.with_file_name("-q");
+        fs::create_dir_all(&moved).unwrap();
+        fs::rename(project.join("s1.jsonl"), moved.join("s1.jsonl")).unwrap();
+        fs::rename(project.join("s1"), moved.join("s1")).unwrap();
+        moved
+    }
+
+    fn archived_paths(store: &Store) -> Vec<String> {
+        let mut paths: Vec<String> = store.archived_files().unwrap().into_keys().collect();
+        paths.sort();
+        paths
+    }
+
+    #[test]
+    fn a_moved_transcript_takes_its_archive_and_its_agents_along() {
+        let mut indexed = Indexed::new();
+        let moved = move_to_q(&indexed.project);
+        let both = [indexed.project.clone(), moved];
+        let refreshed = refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!((refreshed.stored, refreshed.parsed), (0, 1), "a move keeps the file times, so only the parse is new");
+        assert_eq!(archived_paths(&indexed.store), ["-q/s1.jsonl", "-q/s1/subagents/agent-x.jsonl"]);
+        let session = only_session(&indexed.store);
+        assert_eq!((session.path.as_str(), session.archived), ("-q/s1.jsonl", false));
+        let loaded = load_session(&indexed.store, "-q/s1.jsonl", "s1").unwrap();
+        assert!(loaded.turns.iter().any(|turn| matches!(turn, Turn::Agent(_))), "the agent report is attached");
+        assert_eq!(indexed.store.lexical(&Filter::default(), "\"config.rs\"", 5).unwrap().len(), 1);
+        let again = refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!((again.stored, again.parsed), (0, 0));
+    }
+
+    #[test]
+    fn an_index_that_holds_both_paths_of_a_moved_transcript_keeps_the_larger_copy() {
+        let mut indexed = Indexed::new();
+        let copy = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&copy).unwrap();
+        let grown = format!(
+            "{}\n{}",
+            fs::read_to_string(indexed.main_transcript()).unwrap(),
+            line("user", "2026-01-01T10:01:00Z", r#""message":{"role":"user","content":"one more question"}"#)
+        );
+        fs::write(copy.join("s1.jsonl"), grown).unwrap();
+        let both = [indexed.project.clone(), copy];
+        refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!(indexed.store.sessions(&Filter::default()).unwrap().len(), 2, "a copy is no move, both files are on disk");
+
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        refresh(&mut indexed.store, &both).unwrap();
+        let session = only_session(&indexed.store);
+        assert_eq!((session.path.as_str(), session.archived), ("-q/s1.jsonl", false));
+        assert_eq!(indexed.store.lexical(&Filter::default(), "\"one more question\"", 5).unwrap().len(), 1);
+        assert_eq!(archived_paths(&indexed.store), ["-q/s1.jsonl", "-q/s1/subagents/agent-x.jsonl"], "the agent went along");
+    }
+
+    #[test]
+    fn of_two_archived_paths_of_one_session_the_larger_copy_stays_when_the_file_on_disk_is_shorter() {
+        let mut indexed = Indexed::new();
+        let copy = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&copy).unwrap();
+        let line = line("user", "2026-01-01T10:01:00Z", r#""message":{"role":"user","content":"one more question"}"#);
+        let grown = format!("{}\n{line}", fs::read_to_string(indexed.main_transcript()).unwrap());
+        fs::write(copy.join("s1.jsonl"), &grown).unwrap();
+        let both = [indexed.project.clone(), copy.clone()];
+        refresh(&mut indexed.store, &both).unwrap();
+
+        fs::write(copy.join("s1.jsonl"), grown.lines().next().unwrap()).unwrap();
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!(only_session(&indexed.store).path, "-q/s1.jsonl");
+        assert_eq!(indexed.store.lexical(&Filter::default(), "\"one more question\"", 5).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_moved_transcript_that_is_shorter_than_its_archived_copy_keeps_the_copy() {
+        let mut indexed = Indexed::new();
+        let moved = move_to_q(&indexed.project);
+        let whole = fs::read_to_string(moved.join("s1.jsonl")).unwrap();
+        fs::write(moved.join("s1.jsonl"), whole.lines().next().unwrap()).unwrap();
+        refresh(&mut indexed.store, &[indexed.project.clone(), moved]).unwrap();
+        let session = only_session(&indexed.store);
+        assert_eq!(session.path, "-q/s1.jsonl");
+        let kept = load_session(&indexed.store, "-q/s1.jsonl", "s1").unwrap();
+        assert!(kept.turns.iter().any(|turn| matches!(turn, Turn::Assistant(_))), "the longer transcript is still there");
+    }
+
+    fn disk_file(key: &str, session_id: &str) -> DiskFile {
+        DiskFile {
+            path: PathBuf::from(key),
+            key: key.to_owned(),
+            project_dir: key.split('/').next().unwrap().to_owned(),
+            session_id: session_id.to_owned(),
+            parent: None,
+            meta: None,
+            stamp: discover::FileStamp { size: 1, mtime: 1 },
+        }
+    }
+
+    fn moves(archived: &[&str], on_disk: &[&str]) -> Vec<(String, String)> {
+        let sessions: Vec<_> = archived.iter().map(|path| key(path)).collect();
+        let files: Vec<_> = on_disk.iter().map(|path| disk_file(path, "s")).collect();
+        moved_transcripts(&sessions, &files).into_iter().map(|(session, file)| (session.path.clone(), file.key.clone())).collect()
+    }
+
+    #[test]
+    fn a_session_moved_when_its_path_is_gone_and_one_other_file_has_its_id() {
+        assert_eq!(moves(&["-a/s.jsonl"], &["-b/s.jsonl"]), [("-a/s.jsonl".to_owned(), "-b/s.jsonl".to_owned())]);
+        assert_eq!(moves(&["-a/s.jsonl", "-b/s.jsonl"], &["-b/s.jsonl"]), [("-a/s.jsonl".to_owned(), "-b/s.jsonl".to_owned())]);
+        assert_eq!(moves(&["-a/s.jsonl"], &["-a/s.jsonl", "-b/s.jsonl"]), [], "both files are on disk");
+        assert_eq!(moves(&["-a/s.jsonl"], &[]), [], "Claude Code deleted it");
+        assert_eq!(moves(&["-a/s.jsonl"], &["-b/s.jsonl", "-c/s.jsonl"]), [], "two files have its id");
+        let other = disk_file("-b/t.jsonl", "t");
+        assert!(moved_transcripts(&[key("-a/s.jsonl")], std::slice::from_ref(&other)).is_empty(), "another id");
     }
 
     fn key(path: &str) -> ArchivedSessionKey {

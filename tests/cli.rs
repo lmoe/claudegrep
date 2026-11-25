@@ -419,6 +419,34 @@ fn a_session_moved_with_cd_is_listed_where_it_started_and_where_it_moved_to() {
 }
 
 #[test]
+fn a_transcript_moved_after_it_was_indexed_is_one_session() {
+    let fixture = Fixture::new();
+    let (start, moved) = (fixture.dir("start"), fixture.dir("moved"));
+    let (start_cwd, moved_cwd) = (start.to_str().unwrap(), moved.to_str().unwrap());
+    let transcript = Transcript::new(start_cwd)
+        .user("Plan the parser rewrite")
+        .assistant("m1", vec![text("First split the lexer from the parser.")])
+        .ai_title("Parser rewrite");
+    fixture.session(&start, MOVED, &transcript);
+    let report = text("The lexer lives in src/lexer.rs and reads one token at a time from the input.");
+    let agent = Transcript::sidechain(start_cwd).at("2026-01-01T10:00:30.000Z").user("Find the lexer").assistant("r1", vec![report]);
+    fixture.agent(&start, MOVED, "explore", &agent, Some(&agent_meta("Find the lexer", None)));
+    assert_eq!(fixture.run_in(&start, &["--all", "list"]).success().matches("cccc4444").count(), 1);
+
+    fixture.move_session(&start, &moved, MOVED);
+    let later = Transcript::new(moved_cwd).at("2026-01-01T11:00:00.000Z").user("Now write the lexer");
+    fixture.append(&moved, MOVED, &later);
+
+    let all = fixture.run_in(&start, &["--all", "list"]).success();
+    assert_eq!(all.matches("cccc4444").count(), 1, "{all}");
+    assert!(!all.contains("*archived*"), "the transcript is still on disk:\n{all}");
+    for dir in [&start, &moved] {
+        let read = fixture.run_in(dir, &["read", "cccc4444"]).success();
+        assert!(read.contains("Now write the lexer") && read.contains("src/lexer.rs"), "the moved transcript with its agent:\n{read}");
+    }
+}
+
+#[test]
 fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
     let fixture = Fixture::new();
     let repo = fixture.dir("repo");

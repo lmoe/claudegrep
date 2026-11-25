@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Transaction, params};
+use rusqlite::{OptionalExtension, Transaction, params};
 
 use crate::chunk::{self, Chunk};
 use crate::discover::{self, FileStamp};
@@ -32,6 +32,38 @@ impl StoreTx<'_> {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?
             .execute(params![row.path, row.parent, row.project_dir, row.session_id, row.meta, row.stamp.size, row.stamp.mtime, row.data])?;
+        Ok(())
+    }
+
+    /// Moves the archived transcript at `from` and its subagents to `to` in `project_dir`, and drops the sessions parsed
+    /// at both paths, so that `to` is parsed again. Where the archive already holds a file at a new path, the larger of
+    /// the two stays: transcripts only grow, so the smaller one is an older copy.
+    pub fn move_archive(&self, from: &str, to: &str, project_dir: &str) -> Result<()> {
+        let rows: Vec<(String, u64)> = self
+            .0
+            .prepare("SELECT path, size FROM archive WHERE path = ?1 OR parent = ?1")?
+            .query_map([from], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        // A subagent's path is the transcript's without `.jsonl`, then `/subagents/…`.
+        let (from_stem, to_stem) = (from.strip_suffix(".jsonl").unwrap_or(from), to.strip_suffix(".jsonl").unwrap_or(to));
+        for (path, size) in rows {
+            let Some(rest) = path.strip_prefix(from_stem) else {
+                continue;
+            };
+            let target = format!("{to_stem}{rest}");
+            let kept: Option<u64> = self.0.query_row("SELECT size FROM archive WHERE path = ?1", [&target], |row| row.get(0)).optional()?;
+            if kept.is_some_and(|kept| kept >= size) {
+                self.0.execute("DELETE FROM archive WHERE path = ?1", [&path])?;
+            } else {
+                let parent = (path != from).then_some(to);
+                self.0.execute("DELETE FROM archive WHERE path = ?1", [&target])?;
+                self.0.execute(
+                    "UPDATE archive SET path = ?2, parent = ?3, project_dir = ?4 WHERE path = ?1",
+                    params![path, target, parent, project_dir],
+                )?;
+            }
+        }
+        self.0.execute("DELETE FROM sessions WHERE path IN (?1, ?2)", [from, to])?;
         Ok(())
     }
 
