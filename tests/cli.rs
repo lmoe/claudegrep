@@ -541,6 +541,23 @@ fn read_under_a_directory_needs_no_all_and_its_hints_keep_the_scope() {
     assert_snapshot!(fixture.run_in(&apple, &["--under", "../app", "read", "bbbb3333"]).failure());
 }
 
+#[cfg(unix)]
+#[test]
+fn under_a_deleted_directory_behind_a_symbolic_link_finds_its_archived_sessions() {
+    let fixture = Fixture::new();
+    let old = fixture.dir("data/real/old");
+    let transcript =
+        Transcript::new(old.to_str().unwrap()).user("Work in old").assistant("m1", vec![text("Done.")]).ai_title("Old project");
+    fixture.session(&old, TOKEN, &transcript);
+    let work = old.parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+    std::os::unix::fs::symlink(work.join("data/real"), work.join("link")).unwrap();
+    fixture.run_in(&work, &["--all", "list"]).success();
+    fs::remove_dir(&old).unwrap();
+
+    let listed = fixture.run_in(&work, &["--under", "link/old/", "list"]).success();
+    assert!(listed.contains("Old project"), "{listed}");
+}
+
 #[test]
 fn under_and_all_together_are_rejected() {
     let (fixture, work) = app_and_a_neighbour();

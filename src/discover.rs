@@ -178,22 +178,25 @@ impl Scope {
     }
 }
 
-/// `dir` with symbolic links, `.` and `..` resolved. A directory that does not exist, such as a deleted project whose
-/// sessions are archived, has only its `.` and `..` resolved, and loses a trailing slash.
+/// `dir` with symbolic links, `.` and `..` resolved, and without a trailing slash. When the end of `dir` does not exist,
+/// such as a deleted project whose sessions are archived, the longest start of it that exists is resolved, and only the
+/// `.` and `..` of the rest.
 fn resolve(dir: &Path) -> PathBuf {
-    dir.canonicalize().unwrap_or_else(|_| {
-        let mut resolved = PathBuf::new();
-        for part in dir.components() {
-            match part {
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    resolved.pop();
-                }
-                part => resolved.push(part),
+    let parts: Vec<Component<'_>> = dir.components().collect();
+    let (mut resolved, rest) = (0..=parts.len())
+        .rev()
+        .find_map(|end| Some((parts[..end].iter().collect::<PathBuf>().canonicalize().ok()?, &parts[end..])))
+        .unwrap_or((PathBuf::new(), &parts[..]));
+    for part in rest {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
             }
+            part => resolved.push(part),
         }
-        resolved
-    })
+    }
+    resolved
 }
 
 pub fn project_dirs(projects_root: &Path) -> Result<Vec<PathBuf>> {
@@ -406,6 +409,19 @@ mod tests {
         assert_eq!(under("gone/", &base), base.join("gone"));
         assert_eq!(under("./gone/../also-gone/.", &base), base.join("also-gone"));
         assert_eq!(under("/w/gone/", &base), Path::new("/w/gone"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn under_resolves_a_symbolic_link_before_a_directory_that_is_gone() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let base = dir.path().canonicalize().unwrap();
+        let real = base.join("deep").join("real");
+        fs::create_dir_all(&real).unwrap();
+        std::os::unix::fs::symlink(&real, base.join("link")).unwrap();
+        let text = |dir: &str| under(dir, &base).into_os_string().into_string().unwrap();
+        assert_eq!(text("link/gone/"), format!("{}/gone", real.display()));
+        assert_eq!(text("link/../gone"), format!("{}/deep/gone", base.display()), "`..` leaves the directory the link names");
     }
 
     #[cfg(unix)]
