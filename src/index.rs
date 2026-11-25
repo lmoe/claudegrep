@@ -1,13 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 
 use crate::archive;
 use crate::chunk::{self, Chunk};
-use crate::discover::{self, DiskFile};
+use crate::discover::{self, DiskFile, FileStamp};
 use crate::store::{ArchiveRow, ArchivedSession, ArchivedSessionKey, ParseState, SessionKey, Store};
 use crate::transcript::{self, Session};
 
@@ -41,51 +41,86 @@ pub fn refresh(store: &mut Store, project_dirs: &[PathBuf]) -> Result<Refresh> {
 /// in the archive as a second session with the same id.
 fn follow_moved_transcripts(store: &mut Store, files: &[DiskFile]) -> Result<()> {
     let sessions = store.archived_sessions()?;
-    let mut moved = Vec::new();
-    for (archived, file) in moved_transcripts(&sessions, files) {
-        if starts_alike(store, &archived.path, file)? {
-            moved.push((archived, file));
+    let stamps = store.archived_files()?;
+    let mut moves = Vec::new();
+    for planned in moved_transcripts(&sessions, files, &stamps) {
+        if starts_alike(store, &planned)? {
+            moves.push(planned);
         }
     }
-    if moved.is_empty() {
+    if moves.is_empty() {
         return Ok(());
     }
     let tx = store.transaction()?;
-    for (archived, file) in moved {
-        tx.move_archive(&archived.path, &file.key, &file.project_dir)?;
+    for Move { from, to, project_dir, .. } in moves {
+        tx.move_archive(from, to, project_dir)?;
     }
     tx.commit()
 }
 
-/// The archived sessions whose transcript is gone from its path while exactly one transcript on disk has their id, each
-/// with that transcript. A transcript that Claude Code deleted has no other one with its id, so it stays archived.
-fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFile]) -> Vec<(&'a ArchivedSessionKey, &'a DiskFile)> {
-    let mut by_id: HashMap<&str, Vec<&DiskFile>> = HashMap::new();
-    for file in files.iter().filter(|file| file.parent.is_none()) {
-        by_id.entry(file.session_id.as_str()).or_default().push(file);
-    }
-    let on_disk: HashSet<&str> = files.iter().map(|file| file.key.as_str()).collect();
-    sessions
-        .iter()
-        .filter(|session| !on_disk.contains(session.path.as_str()))
-        .filter_map(|session| match by_id.get(session.session_id.as_str())?.as_slice() {
-            [file] => Some((session, *file)),
-            _ => None,
-        })
-        .collect()
+/// An archived session that moves to `to`, the path of the same transcript, in `project_dir`.
+#[derive(Debug, PartialEq, Eq)]
+struct Move<'a> {
+    from: &'a str,
+    to: &'a str,
+    project_dir: &'a str,
+    /// The transcript at `to`, when it is on disk.
+    file: Option<&'a Path>,
 }
 
-/// Whether the transcript archived at `path` and `file` start with the same entry, as two copies of one transcript do.
-/// A file with the same session id that starts differently is another transcript.
-fn starts_alike(store: &Store, path: &str, file: &DiskFile) -> Result<bool> {
-    let Some(archived) = archive::decompress(&store.load_archive(path)?.main) else {
-        return Ok(false);
+/// The archived sessions whose transcript is gone from its path, each with the path it moves to. When exactly one
+/// transcript on disk has the session's id, it moves there. When none has, as after Claude Code deleted a transcript that
+/// an older index holds at two paths, the largest archived copy stays and the others move to it. A transcript that Claude
+/// Code deleted and that has no other copy stays archived where it is.
+fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFile], stamps: &HashMap<String, FileStamp>) -> Vec<Move<'a>> {
+    let mut on_disk_by_id: HashMap<&str, Vec<&DiskFile>> = HashMap::new();
+    for file in files.iter().filter(|file| file.parent.is_none()) {
+        on_disk_by_id.entry(file.session_id.as_str()).or_default().push(file);
+    }
+    let on_disk: HashSet<&str> = files.iter().map(|file| file.key.as_str()).collect();
+    let mut gone_by_id: BTreeMap<&str, Vec<&ArchivedSessionKey>> = BTreeMap::new();
+    for session in sessions.iter().filter(|session| !on_disk.contains(session.path.as_str())) {
+        gone_by_id.entry(session.session_id.as_str()).or_default().push(session);
+    }
+    let mut moves = Vec::new();
+    for (id, gone) in gone_by_id {
+        match on_disk_by_id.get(id).map(Vec::as_slice) {
+            Some([file]) => moves.extend(gone.iter().map(|session| Move {
+                from: &session.path,
+                to: &file.key,
+                project_dir: &file.project_dir,
+                file: Some(&file.path),
+            })),
+            None => {
+                let size = |session: &ArchivedSessionKey| stamps.get(&session.path).map_or(0, |stamp| stamp.size);
+                let Some(kept) = gone.iter().max_by_key(|session| (size(session), &session.path)) else {
+                    continue;
+                };
+                moves.extend(gone.iter().filter(|session| session.path != kept.path).map(|session| Move {
+                    from: &session.path,
+                    to: &kept.path,
+                    project_dir: &kept.project_dir,
+                    file: None,
+                }));
+            }
+            Some(_) => {}
+        }
+    }
+    moves
+}
+
+/// Whether the transcript archived at `planned.from` starts with the same entry as the one at `planned.to`, as two
+/// copies of one transcript do. A transcript with the same session id that starts differently is another one.
+fn starts_alike(store: &Store, planned: &Move<'_>) -> Result<bool> {
+    let archived_first_line = |path: &str| -> Result<Option<Vec<u8>>> {
+        Ok(archive::decompress(&store.load_archive(path)?.main).and_then(|text| archive::first_kept_line(text.as_bytes())))
     };
-    let Ok(on_disk) = fs::read(&file.path) else {
-        return Ok(false);
+    let from = archived_first_line(planned.from)?;
+    let to = match planned.file {
+        Some(path) => fs::read(path).ok().and_then(|bytes| archive::first_kept_line(&bytes)),
+        None => archived_first_line(planned.to)?,
     };
-    let first = archive::first_kept_line(archived.as_bytes());
-    Ok(first.is_some() && first == archive::first_kept_line(&on_disk))
+    Ok(from.is_some() && from == to)
 }
 
 /// Archives the files that are new or replace their archived version and returns, for each one stored, the path of the session it belongs to.
@@ -613,6 +648,34 @@ mod tests {
     }
 
     #[test]
+    fn an_old_index_with_two_archived_paths_of_a_deleted_session_keeps_the_larger_one() {
+        let mut indexed = Indexed::new();
+        let copy = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&copy).unwrap();
+        let grown = format!(
+            "{}\n{}",
+            fs::read_to_string(indexed.main_transcript()).unwrap(),
+            line("user", "2026-01-01T10:01:00Z", r#""message":{"role":"user","content":"one more question"}"#)
+        );
+        fs::write(copy.join("s1.jsonl"), grown).unwrap();
+        let both = [indexed.project.clone(), copy.clone()];
+        refresh(&mut indexed.store, &both).unwrap();
+        assert_eq!(indexed.store.sessions(&Filter::default()).unwrap().len(), 2);
+
+        // An index of schema 4 holds both paths, and then Claude Code deleted both transcripts.
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        fs::remove_dir_all(indexed.project.join("s1")).unwrap();
+        fs::remove_file(copy.join("s1.jsonl")).unwrap();
+        indexed.execute("DROP TABLE session_dirs; UPDATE meta SET value = '4' WHERE key = 'schema';");
+        indexed.store = Store::open(&indexed.dir.path().join("index.sqlite")).unwrap();
+        refresh(&mut indexed.store, &both).unwrap();
+        let session = only_session(&indexed.store);
+        assert_eq!((session.path.as_str(), session.archived), ("-q/s1.jsonl", true));
+        assert_eq!(indexed.store.lexical(&Filter::default(), "\"one more question\"", 5).unwrap().len(), 1);
+        assert_eq!(archived_paths(&indexed.store), ["-q/s1.jsonl", "-q/s1/subagents/agent-x.jsonl"]);
+    }
+
+    #[test]
     fn a_transcript_with_the_same_id_that_starts_differently_is_no_move() {
         let mut indexed = Indexed::new();
         let other = indexed.project.with_file_name("-q");
@@ -638,10 +701,15 @@ mod tests {
         }
     }
 
-    fn moves(archived: &[&str], on_disk: &[&str]) -> Vec<(String, String)> {
-        let sessions: Vec<_> = archived.iter().map(|path| key(path)).collect();
+    fn moves_by_size(archived: &[(&str, u64)], on_disk: &[&str]) -> Vec<(String, String)> {
+        let sessions: Vec<_> = archived.iter().map(|(path, _)| key(path)).collect();
+        let stamps = archived.iter().map(|(path, size)| ((*path).to_owned(), discover::FileStamp { size: *size, mtime: 1 })).collect();
         let files: Vec<_> = on_disk.iter().map(|path| disk_file(path, "s")).collect();
-        moved_transcripts(&sessions, &files).into_iter().map(|(session, file)| (session.path.clone(), file.key.clone())).collect()
+        moved_transcripts(&sessions, &files, &stamps).into_iter().map(|planned| (planned.from.to_owned(), planned.to.to_owned())).collect()
+    }
+
+    fn moves(archived: &[&str], on_disk: &[&str]) -> Vec<(String, String)> {
+        moves_by_size(&archived.iter().map(|path| (*path, 1)).collect::<Vec<_>>(), on_disk)
     }
 
     #[test]
@@ -652,7 +720,18 @@ mod tests {
         assert_eq!(moves(&["-a/s.jsonl"], &[]), [], "Claude Code deleted it");
         assert_eq!(moves(&["-a/s.jsonl"], &["-b/s.jsonl", "-c/s.jsonl"]), [], "two files have its id");
         let other = disk_file("-b/t.jsonl", "t");
-        assert!(moved_transcripts(&[key("-a/s.jsonl")], std::slice::from_ref(&other)).is_empty(), "another id");
+        assert!(moved_transcripts(&[key("-a/s.jsonl")], std::slice::from_ref(&other), &HashMap::new()).is_empty(), "another id");
+    }
+
+    #[test]
+    fn archived_copies_of_a_session_that_is_on_disk_nowhere_move_to_the_largest() {
+        let to_b = |from: &str| (from.to_owned(), "-b/s.jsonl".to_owned());
+        assert_eq!(moves_by_size(&[("-a/s.jsonl", 5), ("-b/s.jsonl", 9)], &[]), [to_b("-a/s.jsonl")]);
+        assert_eq!(
+            moves_by_size(&[("-b/s.jsonl", 9), ("-a/s.jsonl", 5), ("-c/s.jsonl", 7)], &[]),
+            [to_b("-a/s.jsonl"), to_b("-c/s.jsonl")]
+        );
+        assert_eq!(moves_by_size(&[("-a/s.jsonl", 9), ("-b/s.jsonl", 9)], &[]), [to_b("-a/s.jsonl")], "the same size picks one path");
     }
 
     fn key(path: &str) -> ArchivedSessionKey {
