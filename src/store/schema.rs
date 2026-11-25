@@ -218,4 +218,30 @@ mod tests {
         assert!(locked_at.elapsed() < hold, "a current index waited for the holder");
         holder.join().unwrap();
     }
+
+    #[test]
+    fn an_upgrade_that_waited_for_a_writer_reads_the_version_again() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        store.use_embedder("model").unwrap();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("words"), tokens: 1, data: &[1] }]).unwrap();
+        store.conn.execute("UPDATE meta SET value = '3' WHERE key = 'schema'", []).unwrap();
+        drop(store);
+
+        let (locked, wait_for_lock) = std::sync::mpsc::channel();
+        let holder_path = path.clone();
+        let holder = std::thread::spawn(move || {
+            let conn = rusqlite::Connection::open(&holder_path).unwrap();
+            conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+            locked.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            conn.execute_batch(&format!("UPDATE meta SET value = '{SCHEMA_VERSION}' WHERE key = 'schema'; COMMIT")).unwrap();
+        });
+        wait_for_lock.recv().unwrap();
+        let store = Store::open(&path).unwrap();
+        holder.join().unwrap();
+        assert_eq!(vector_rows(&store), 1, "the second upgrade rebuilt what the first one had kept");
+        assert_eq!(store.embedder().unwrap().as_deref(), Some("model"));
+    }
 }
