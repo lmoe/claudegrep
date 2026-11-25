@@ -116,12 +116,17 @@ fn stem(path: &Path) -> String {
 }
 
 /// The directories a session is in, out of the working directories its entries name (`cwds`, the first one first). It
-/// is in the one it started in. It is also in a later one whose name gives the project directory that holds the
-/// transcript: after `/cd`, Claude Code keeps the transcript in the project directory of the new directory. A `cd` in a
-/// shell command changes only the working directory of later entries, so its directory does not count. The whole path is
-/// stored and compared, because `encode` gives `/w/a-b` and `/w/a/b` the same project directory.
+/// is in the one it started in. After `/cd`, Claude Code keeps the transcript in the project directory of the new
+/// directory, so the transcript has moved when the first directory does not give the name of the project directory that
+/// holds it. Then the session is also in each later directory that gives that name. A `cd` in a shell command changes
+/// only the working directory of later entries, so its directory does not count. The whole path is stored and compared,
+/// because `encode` gives `/w/a.b`, `/w/a-b` and `/w/a/b` the same project directory.
 pub fn session_dirs<'a>(project_dir: &str, cwds: &'a [String]) -> impl Iterator<Item = &'a str> {
-    cwds.iter().enumerate().filter(move |(index, cwd)| *index == 0 || encode(Path::new(cwd)) == project_dir).map(|(_, cwd)| cwd.as_str())
+    let moved = cwds.first().is_some_and(|first| encode(Path::new(first)) != project_dir);
+    cwds.iter()
+        .enumerate()
+        .filter(move |(index, cwd)| *index == 0 || (moved && encode(Path::new(cwd)) == project_dir))
+        .map(|(_, cwd)| cwd.as_str())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -335,5 +340,14 @@ mod tests {
         let dirs: Vec<_> = session_dirs("-w-a-b", &cwds).collect();
         assert_eq!(dirs, ["/w/x", "/w/a-b", "/w/a/b"], "an entry that names /w/a/b is the only way to tell it from /w/a-b");
         assert_eq!(session_dirs("-w-a-b", &[]).count(), 0);
+    }
+
+    #[test]
+    fn a_session_that_did_not_move_is_only_in_its_first_directory() {
+        let dirs = |cwds: &[&str]| {
+            session_dirs("-w-a-b", &cwds.iter().map(|cwd| (*cwd).to_owned()).collect::<Vec<_>>()).map(str::to_owned).collect::<Vec<_>>()
+        };
+        assert_eq!(dirs(&["/w/a.b", "/w/a-b"]), ["/w/a.b"], "a shell cd to a directory with the same encoded name");
+        assert_eq!(dirs(&["/w/a-b", "/w/a/b"]), ["/w/a-b"]);
     }
 }

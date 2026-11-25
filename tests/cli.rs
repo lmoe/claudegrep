@@ -447,6 +447,26 @@ fn a_transcript_moved_after_it_was_indexed_is_one_session() {
 }
 
 #[test]
+fn a_shell_cd_to_a_directory_with_the_same_encoded_name_adds_no_directory() {
+    let fixture = Fixture::new();
+    // `a.b`, `a-b` and `a/b` share one project directory.
+    for (start, shell, id, title) in [("a.b", "a-b", TOKEN, "Dot session"), ("a-b", "a/b", NOTES, "Dash session")] {
+        let (start, shell) = (fixture.dir(start), fixture.dir(shell));
+        let transcript = Transcript::new(start.to_str().unwrap())
+            .user("Look around")
+            .cwd(shell.to_str().unwrap())
+            .assistant("m1", vec![text("Looked around.")])
+            .ai_title(title);
+        fixture.session(&start, id, &transcript);
+    }
+    let listed = |dir: &str| fixture.run_in(&fixture.dir(dir), &["list"]).success();
+    let (dot, dash, slash) = (listed("a.b"), listed("a-b"), listed("a/b"));
+    assert!(dot.contains("Dot session") && !dot.contains("Dash session"), "{dot}");
+    assert!(dash.contains("Dash session") && !dash.contains("Dot session"), "{dash}");
+    assert!(!slash.contains("Dot session") && !slash.contains("Dash session"), "{slash}");
+}
+
+#[test]
 fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
     let fixture = Fixture::new();
     let repo = fixture.dir("repo");
