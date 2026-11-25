@@ -4,4 +4,4 @@ expression: "project.fixture.run_in(&empty, &[\"list\"]).success()"
 ---
 # Sessions in `[ROOT]/work/empty`
 
-*(no sessions started in `[ROOT]/work/empty` under `[ROOT]/projects`, the configured projects-root; `claudegrep --all list` covers every project there, and `claudegrep config projects-root --unset` goes back to Claude Code's own)*
+*(no sessions in `[ROOT]/work/empty` under `[ROOT]/projects`, the configured projects-root; `claudegrep --all list` covers every project there, and `claudegrep config projects-root --unset` goes back to Claude Code's own)*

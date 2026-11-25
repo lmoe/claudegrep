@@ -131,9 +131,9 @@ const RESET_ROOT: &str = "`claudegrep config projects-root --unset` goes back to
 /// Claude Code does have sessions.
 pub fn nothing_here(scope: &Scope, command: &str, moved_root: Option<&Path>) -> String {
     match (scope.root(), moved_root) {
-        (Some(dir), None) => format!("*(no sessions started in `{}`; `claudegrep --all {command}` covers every project)*\n", dir.display()),
+        (Some(dir), None) => format!("*(no sessions in `{}`; `claudegrep --all {command}` covers every project)*\n", dir.display()),
         (Some(dir), Some(root)) => format!(
-            "*(no sessions started in `{}` under `{}`, the configured projects-root; `claudegrep --all {command}` covers every \
+            "*(no sessions in `{}` under `{}`, the configured projects-root; `claudegrep --all {command}` covers every \
              project there, and {RESET_ROOT})*\n",
             dir.display(),
             root.display()
@@ -153,7 +153,7 @@ mod tests {
         let root = Some(Path::new("/test/projects"));
         assert_eq!(
             nothing_here(&directory, "search", root),
-            "*(no sessions started in `/p/app` under `/test/projects`, the configured projects-root; `claudegrep --all search` \
+            "*(no sessions in `/p/app` under `/test/projects`, the configured projects-root; `claudegrep --all search` \
              covers every project there, and `claudegrep config projects-root --unset` goes back to Claude Code's own)*\n"
         );
         assert_eq!(
@@ -170,10 +170,7 @@ mod tests {
         assert_eq!(scope_name(&Scope::All), "all projects");
         assert_eq!(invocation(&directory), "claudegrep");
         assert_eq!(invocation(&Scope::All), "claudegrep --all");
-        assert_eq!(
-            nothing_here(&directory, "list", None),
-            "*(no sessions started in `/p/app`; `claudegrep --all list` covers every project)*\n"
-        );
+        assert_eq!(nothing_here(&directory, "list", None), "*(no sessions in `/p/app`; `claudegrep --all list` covers every project)*\n");
         assert_eq!(nothing_here(&Scope::All, "search", None), "*(none)*\n");
     }
 
