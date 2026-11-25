@@ -424,6 +424,19 @@ mod tests {
     }
 
     #[test]
+    fn a_query_of_only_short_words_is_ranked_by_meaning_alone() {
+        let mut store = TempStore::new();
+        store.add("-p", "ox", &Transcript::new("/p").user("an ox is at it"));
+        store.add("-p", "cake", &Transcript::new("/p").at("2026-01-02T10:00:00.000Z").user("mix flour and sugar"));
+        let encoder = FakeEncoder::new();
+        pipeline::embed_pending(&mut store, &encoder, |_| {}).unwrap();
+
+        assert_eq!(fts_query("ox it"), None, "no word has three characters");
+        let groups = find(&store, &Filter::default(), &encoder, "ox it", window(1, 0, 0)).unwrap();
+        assert_eq!(summary(&groups), [("ox".to_owned(), vec![(0, 0..1)])]);
+    }
+
+    #[test]
     fn find_ranks_by_meaning_without_a_lexical_match() {
         let (store, encoder) = indexed();
         // Every word is shorter than three characters, so there is no text search, only the vectors.

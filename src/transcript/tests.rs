@@ -517,6 +517,38 @@ fn titles_prefer_custom_then_ai_then_the_first_prompt() {
 }
 
 #[test]
+fn a_custom_title_entry_without_a_title_keeps_the_earlier_one() {
+    let base = || Transcript::new(CWD).user("first prompt").assistant("a", vec![text("Reply.")]).custom_title("Kept");
+    let title = |transcript: Transcript| parsed(&transcript).meta.title;
+    assert_eq!(title(base().raw(r#"{"type":"custom-title"}"#).raw(r#"{"type":"custom-title","customTitle":null}"#)), "Kept");
+    assert_eq!(title(base().custom_title("Later")), "Later");
+}
+
+#[test]
+fn an_assistant_entry_whose_content_is_a_string_opens_a_turn_without_blocks() {
+    let transcript = Transcript::new(CWD)
+        .user("question")
+        .entry("assistant", json!({ "message": { "id": "a", "model": "m", "content": "a plain string" } }))
+        .assistant("b", vec![text("A real block.")]);
+    let turns = turns(&transcript);
+    assert_eq!(turns.len(), 2, "the string opens the turn that the next entry continues");
+    let reply = assistant(&turns[1]);
+    assert_eq!(reply.model.as_deref(), Some("m"));
+    assert!(matches!(reply.blocks.as_slice(), [Block::Text(t)] if t == "A real block."), "{:?}", reply.blocks);
+    let alone = parsed(&Transcript::new(CWD).user("question").entry("assistant", json!({ "message": { "id": "a", "content": "text" } })));
+    assert!(assistant(&alone.turns[1]).blocks.is_empty());
+}
+
+#[test]
+fn an_agent_report_ignores_assistant_entries_whose_content_is_not_a_list() {
+    let report = || agent().user("Find the loader").assistant("m1", vec![text(REPORT)]);
+    let expected = agent_report(&report().build(), None).unwrap();
+    let with_string = report().entry("assistant", json!({ "message": { "id": "m2", "content": "a string, not blocks" } }));
+    let actual = agent_report(&with_string.build(), None).unwrap();
+    assert_eq!((actual.text.as_str(), actual.timestamp), (REPORT, expected.timestamp));
+}
+
+#[test]
 fn long_first_prompts_are_cut_for_the_title() {
     let title = |prompt: &str| parsed(&Transcript::new(CWD).user(prompt).assistant("a", vec![text("ok")])).meta.title;
     assert_eq!(title(&"x".repeat(61)), format!("{}…", "x".repeat(59)));
