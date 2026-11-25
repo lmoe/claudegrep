@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, OptionalExtension, Params, Row, Statement, params};
+use rusqlite::{Connection, OptionalExtension, Params, Row, Statement, TransactionBehavior, params};
 
 use crate::chunk::ChunkHash;
 use crate::discover::{FileStamp, Scope};
@@ -67,20 +67,26 @@ pub struct Stats {
     pub vector_bytes: u64,
 }
 
+const BUSY_TIMEOUT: Duration = Duration::from_secs(60);
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
         let mut conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
-        conn.busy_timeout(Duration::from_secs(60))?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        enable_wal(&conn)?;
+        conn.execute_batch("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
         schema::ensure(&mut conn)?;
         Ok(Self { conn })
     }
 
     pub fn use_embedder(&mut self, embedder: &str) -> Result<bool> {
-        let tx = self.conn.transaction()?;
+        if get_meta(&self.conn, "embedder")?.as_deref() == Some(embedder) {
+            return Ok(false);
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let previous = get_meta(&tx, "embedder")?;
         if previous.as_deref() == Some(embedder) {
             return Ok(false);
@@ -153,8 +159,10 @@ impl Store {
         Ok(())
     }
 
+    /// Takes the write lock at once. A transaction that reads first and writes later fails with "database is locked"
+    /// at once, without waiting, when another process writes.
     pub fn transaction(&mut self) -> Result<StoreTx<'_>> {
-        Ok(StoreTx(self.conn.transaction()?))
+        Ok(StoreTx(self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?))
     }
 
     pub fn sync_text_index(&self) -> Result<()> {
@@ -299,6 +307,22 @@ fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>> {
     Ok(conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| row.get(0)).optional()?)
 }
 
+/// The switch to WAL fails with "database is locked" at once, without the busy timeout, when another connection
+/// switches it too. The other one wins, so it is enough to ask again.
+fn enable_wal(conn: &Connection) -> Result<()> {
+    let deadline = Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get::<_, String>(0)) {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == rusqlite::ErrorCode::DatabaseBusy && Instant::now() < deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => return result.map(drop).map_err(Into::into),
+        }
+    }
+}
+
 fn set_meta(conn: &Connection, key: &str, value: &str) -> Result<()> {
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)", [key, value])?;
     Ok(())
@@ -434,6 +458,70 @@ mod tests {
         holder.join().unwrap();
         assert_eq!(store.config_value("held").unwrap().as_deref(), Some("yes"));
         assert_eq!(store.gc_vectors().unwrap(), 1, "the vector is stored");
+    }
+
+    fn archived_store_with_held_lock(hold: Duration) -> (Store, Instant, std::thread::JoinHandle<()>, tempfile::TempDir) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        let tx = store.transaction().unwrap();
+        tx.archive(&archive_row("-p/s1.jsonl", None, b"one")).unwrap();
+        tx.commit().unwrap();
+        store.use_embedder("model-a").unwrap();
+        let (locked_at, holder) = hold_write_lock(&path, hold);
+        (store, locked_at, holder, dir)
+    }
+
+    #[test]
+    fn moving_an_archive_waits_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        let tx = store.transaction().unwrap();
+        tx.move_archive("-p/s1.jsonl", "-q/s1.jsonl", "-q").unwrap();
+        tx.commit().unwrap();
+        assert!(locked_at.elapsed() >= hold, "the move did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert!(store.archived_files().unwrap().contains_key("-q/s1.jsonl"));
+    }
+
+    #[test]
+    fn changing_the_embedder_waits_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        store.use_embedder("model-b").unwrap();
+        assert!(locked_at.elapsed() >= hold, "the change did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert_eq!(store.embedder().unwrap().as_deref(), Some("model-b"));
+    }
+
+    #[test]
+    fn keeping_the_embedder_does_not_wait_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        assert!(!store.use_embedder("model-a").unwrap());
+        assert!(locked_at.elapsed() < hold, "a read waited for the holder");
+        holder.join().unwrap();
+    }
+
+    #[test]
+    fn two_processes_create_a_new_index_at_once() {
+        for _ in 0..30 {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().join("index.sqlite");
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let openers: Vec<_> = (0..2)
+                .map(|_| {
+                    let (path, barrier) = (path.clone(), barrier.clone());
+                    std::thread::spawn(move || {
+                        barrier.wait();
+                        Store::open(&path).map(drop)
+                    })
+                })
+                .collect();
+            for opener in openers {
+                opener.join().unwrap().unwrap_or_else(|error| panic!("{error:#}"));
+            }
+        }
     }
 
     fn two_archived_sessions() -> TempStore {

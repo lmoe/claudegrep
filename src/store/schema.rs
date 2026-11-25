@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
 
 use super::{get_meta, set_meta};
 
@@ -69,13 +69,21 @@ CREATE TABLE IF NOT EXISTS archive (
 CREATE INDEX IF NOT EXISTS archive_parent ON archive (parent);
 ";
 
+fn schema_version(conn: &Connection) -> Result<Option<String>> {
+    let has_meta: bool = conn.query_row("SELECT count(*) FROM sqlite_master WHERE name = 'meta'", [], |row| row.get(0))?;
+    if has_meta { get_meta(conn, "schema") } else { Ok(None) }
+}
+
 /// Creates what `conn` is missing. An index of another `SCHEMA_VERSION` is rebuilt, except the archive and the settings,
 /// and except the vectors of `SAME_VECTORS_SCHEMA_VERSIONS`.
 pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
-    let tx = conn.transaction()?;
+    if schema_version(conn)?.as_deref() == Some(SCHEMA_VERSION) {
+        return Ok(());
+    }
+    // IMMEDIATE: a transaction that reads first cannot wait for another writer.
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     tx.execute_batch(PERSISTENT)?;
-    let has_meta: bool = tx.query_row("SELECT count(*) FROM sqlite_master WHERE name = 'meta'", [], |row| row.get(0))?;
-    let version = if has_meta { get_meta(&tx, "schema")? } else { None };
+    let version = schema_version(&tx)?;
     if version.as_deref() != Some(SCHEMA_VERSION) {
         tx.execute_batch(
             "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS chunk_fts; DROP TABLE IF EXISTS session_dirs;
@@ -180,5 +188,60 @@ mod tests {
         Store::open(&path).unwrap().conn.execute("UPDATE meta SET value = '7' WHERE key = 'schema'", []).unwrap();
 
         assert_rebuilt_without_vectors(&path);
+    }
+
+    fn index_of_version(version: &str) -> (TempDir, std::path::PathBuf) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let store = Store::open(&path).unwrap();
+        store.conn.execute("UPDATE meta SET value = ?1 WHERE key = 'schema'", [version]).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn opening_an_index_of_version_5_waits_for_another_writer() {
+        let (_dir, path) = index_of_version("5");
+        let hold = std::time::Duration::from_millis(400);
+        let (locked_at, holder) = crate::test_support::store::hold_write_lock(&path, hold);
+        let store = Store::open(&path).unwrap();
+        assert!(locked_at.elapsed() >= hold, "the upgrade did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert_eq!(get_meta(&store.conn, "schema").unwrap().as_deref(), Some(SCHEMA_VERSION));
+    }
+
+    #[test]
+    fn opening_a_current_index_does_not_wait_for_another_writer() {
+        let (_dir, path) = index_of_version(SCHEMA_VERSION);
+        let hold = std::time::Duration::from_millis(400);
+        let (locked_at, holder) = crate::test_support::store::hold_write_lock(&path, hold);
+        Store::open(&path).unwrap();
+        assert!(locked_at.elapsed() < hold, "a current index waited for the holder");
+        holder.join().unwrap();
+    }
+
+    #[test]
+    fn an_upgrade_that_waited_for_a_writer_reads_the_version_again() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        store.use_embedder("model").unwrap();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("words"), tokens: 1, data: &[1] }]).unwrap();
+        store.conn.execute("UPDATE meta SET value = '3' WHERE key = 'schema'", []).unwrap();
+        drop(store);
+
+        let (locked, wait_for_lock) = std::sync::mpsc::channel();
+        let holder_path = path.clone();
+        let holder = std::thread::spawn(move || {
+            let conn = rusqlite::Connection::open(&holder_path).unwrap();
+            conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+            locked.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            conn.execute_batch(&format!("UPDATE meta SET value = '{SCHEMA_VERSION}' WHERE key = 'schema'; COMMIT")).unwrap();
+        });
+        wait_for_lock.recv().unwrap();
+        let store = Store::open(&path).unwrap();
+        holder.join().unwrap();
+        assert_eq!(vector_rows(&store), 1, "the second upgrade rebuilt what the first one had kept");
+        assert_eq!(store.embedder().unwrap().as_deref(), Some("model"));
     }
 }
