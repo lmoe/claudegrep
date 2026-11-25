@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 
 use tempfile::TempDir;
 
@@ -55,6 +55,10 @@ impl Fixture {
         }
     }
 
+    pub fn db_path(&self) -> PathBuf {
+        self.root.join("db.sqlite")
+    }
+
     pub fn remove_projects_root(&self) {
         fs::remove_dir_all(&self.projects).expect("the projects root is removed");
     }
@@ -93,6 +97,13 @@ impl Fixture {
         let mut command = self.command(cwd, args);
         self.isolate_home(&mut command);
         self.finish(command, env)
+    }
+
+    /// Starts claudegrep with its stdout and stderr piped, for a test that reads or closes them itself.
+    pub fn spawn_in(&self, cwd: &Path, args: &[&str]) -> Child {
+        let mut command = self.command(cwd, args);
+        self.isolate_home(&mut command);
+        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("claudegrep starts")
     }
 
     /// Runs claudegrep in `dir` after `dir` is deleted. `sh` deletes it while it is the current directory, and then
@@ -134,7 +145,7 @@ impl Fixture {
             .env_remove("ORT_DYLIB_PATH")
             .env("TZ", "UTC")
             .env("XDG_DATA_HOME", self.root.join("home/.local/share"))
-            .env("CLAUDEGREP_DB", self.root.join("db.sqlite"));
+            .env("CLAUDEGREP_DB", self.db_path());
     }
 
     fn finish(&self, mut command: Command, env: &[(&str, &str)]) -> Run {
