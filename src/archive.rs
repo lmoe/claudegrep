@@ -28,6 +28,11 @@ pub fn decompress(data: &[u8]) -> Option<String> {
     Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// The first line that the archive keeps of `transcript`. A transcript only grows, so each copy of it starts with this line.
+pub fn first_kept_line(transcript: &[u8]) -> Option<Vec<u8>> {
+    transcript.split(|&b| b == b'\n').map(slim).find(|line| !line.is_empty())
+}
+
 fn compress(bytes: &[u8]) -> Option<Vec<u8>> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(bytes).ok()?;
@@ -91,6 +96,15 @@ mod tests {
         assert!(!slimmed.contains("c2ln") && !slimmed.contains("enc"));
         assert!(slimmed.contains(r#""content":"out""#) && slimmed.contains(r#""thinking":"hmm""#));
         assert!(slimmed.ends_with("not json\n"));
+    }
+
+    #[test]
+    fn a_transcript_and_its_archived_copy_have_the_same_first_kept_line() {
+        let raw = b"\n{\"type\":\"attachment\"}\n{\"type\":\"user\",\"toolUseResult\":1,\"b\":2,\"a\":1}\n{\"type\":\"assistant\"}";
+        let first = String::from_utf8(first_kept_line(raw).unwrap()).unwrap();
+        assert!(first.contains(r#""type":"user""#) && !first.contains("toolUseResult"), "{first}");
+        assert_eq!(first_kept_line(&slim(raw)), Some(first.into_bytes()));
+        assert_eq!(first_kept_line(b"\n \n"), None);
     }
 
     #[test]

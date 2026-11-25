@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -40,7 +41,12 @@ pub fn refresh(store: &mut Store, project_dirs: &[PathBuf]) -> Result<Refresh> {
 /// in the archive as a second session with the same id.
 fn follow_moved_transcripts(store: &mut Store, files: &[DiskFile]) -> Result<()> {
     let sessions = store.archived_sessions()?;
-    let moved = moved_transcripts(&sessions, files);
+    let mut moved = Vec::new();
+    for (archived, file) in moved_transcripts(&sessions, files) {
+        if starts_alike(store, &archived.path, file)? {
+            moved.push((archived, file));
+        }
+    }
     if moved.is_empty() {
         return Ok(());
     }
@@ -67,6 +73,19 @@ fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFil
             _ => None,
         })
         .collect()
+}
+
+/// Whether the transcript archived at `path` and `file` start with the same entry, as two copies of one transcript do.
+/// A file with the same session id that starts differently is another transcript.
+fn starts_alike(store: &Store, path: &str, file: &DiskFile) -> Result<bool> {
+    let Some(archived) = archive::decompress(&store.load_archive(path)?.main) else {
+        return Ok(false);
+    };
+    let Ok(on_disk) = fs::read(&file.path) else {
+        return Ok(false);
+    };
+    let first = archive::first_kept_line(archived.as_bytes());
+    Ok(first.is_some() && first == archive::first_kept_line(&on_disk))
 }
 
 /// Archives the files that are new or replace their archived version and returns, for each one stored, the path of the session it belongs to.
@@ -591,6 +610,20 @@ mod tests {
         assert_eq!(session.path, "-q/s1.jsonl");
         let kept = load_session(&indexed.store, "-q/s1.jsonl", "s1").unwrap();
         assert!(kept.turns.iter().any(|turn| matches!(turn, Turn::Assistant(_))), "the longer transcript is still there");
+    }
+
+    #[test]
+    fn a_transcript_with_the_same_id_that_starts_differently_is_no_move() {
+        let mut indexed = Indexed::new();
+        let other = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&other).unwrap();
+        let start = line("user", "2026-02-01T09:00:00Z", r#""message":{"role":"user","content":"another start"}"#);
+        fs::write(other.join("s1.jsonl"), start).unwrap();
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        refresh(&mut indexed.store, &[indexed.project.clone(), other]).unwrap();
+        let mut paths: Vec<_> = indexed.store.sessions(&Filter::default()).unwrap().into_iter().map(|session| session.path).collect();
+        paths.sort();
+        assert_eq!(paths, ["-p/s1.jsonl", "-q/s1.jsonl"]);
     }
 
     fn disk_file(key: &str, session_id: &str) -> DiskFile {
