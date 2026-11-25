@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, OptionalExtension, Params, Row, Statement, params};
+use rusqlite::{Connection, OptionalExtension, Params, Row, Statement, TransactionBehavior, params};
 
 use crate::chunk::ChunkHash;
 use crate::discover::{FileStamp, Scope};
@@ -80,7 +80,10 @@ impl Store {
     }
 
     pub fn use_embedder(&mut self, embedder: &str) -> Result<bool> {
-        let tx = self.conn.transaction()?;
+        if get_meta(&self.conn, "embedder")?.as_deref() == Some(embedder) {
+            return Ok(false);
+        }
+        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let previous = get_meta(&tx, "embedder")?;
         if previous.as_deref() == Some(embedder) {
             return Ok(false);
@@ -153,8 +156,10 @@ impl Store {
         Ok(())
     }
 
+    /// Takes the write lock at once. A transaction that reads first and writes later fails with "database is locked"
+    /// at once, without waiting, when another process writes.
     pub fn transaction(&mut self) -> Result<StoreTx<'_>> {
-        Ok(StoreTx(self.conn.transaction()?))
+        Ok(StoreTx(self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?))
     }
 
     pub fn sync_text_index(&self) -> Result<()> {
@@ -309,6 +314,8 @@ mod tests {
     use super::*;
     use crate::chunk::{self, Role};
     use crate::test_support::lines::Transcript;
+    use std::time::Instant;
+
     use crate::test_support::store::{TempStore, hold_write_lock};
 
     pub(super) const STAMP: FileStamp = FileStamp { size: 7, mtime: 1_767_261_600_000_000_000 };
@@ -434,6 +441,49 @@ mod tests {
         holder.join().unwrap();
         assert_eq!(store.config_value("held").unwrap().as_deref(), Some("yes"));
         assert_eq!(store.gc_vectors().unwrap(), 1, "the vector is stored");
+    }
+
+    fn archived_store_with_held_lock(hold: Duration) -> (Store, Instant, std::thread::JoinHandle<()>, tempfile::TempDir) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        let tx = store.transaction().unwrap();
+        tx.archive(&archive_row("-p/s1.jsonl", None, b"one")).unwrap();
+        tx.commit().unwrap();
+        store.use_embedder("model-a").unwrap();
+        let (locked_at, holder) = hold_write_lock(&path, hold);
+        (store, locked_at, holder, dir)
+    }
+
+    #[test]
+    fn moving_an_archive_waits_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        let tx = store.transaction().unwrap();
+        tx.move_archive("-p/s1.jsonl", "-q/s1.jsonl", "-q").unwrap();
+        tx.commit().unwrap();
+        assert!(locked_at.elapsed() >= hold, "the move did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert!(store.archived_files().unwrap().contains_key("-q/s1.jsonl"));
+    }
+
+    #[test]
+    fn changing_the_embedder_waits_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        store.use_embedder("model-b").unwrap();
+        assert!(locked_at.elapsed() >= hold, "the change did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert_eq!(store.embedder().unwrap().as_deref(), Some("model-b"));
+    }
+
+    #[test]
+    fn keeping_the_embedder_does_not_wait_for_another_writer() {
+        let hold = Duration::from_millis(400);
+        let (mut store, locked_at, holder, _dir) = archived_store_with_held_lock(hold);
+        assert!(!store.use_embedder("model-a").unwrap());
+        assert!(locked_at.elapsed() < hold, "a read waited for the holder");
+        holder.join().unwrap();
     }
 
     fn two_archived_sessions() -> TempStore {

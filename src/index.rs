@@ -166,6 +166,9 @@ fn archive_changed(store: &mut Store, files: &[DiskFile]) -> Result<Vec<String>>
     let changed: Vec<&DiskFile> =
         files.iter().filter(|file| known.get(&file.key).is_none_or(|&archived| file.stamp.replaces(archived))).collect();
     let rows: Vec<ArchiveRow> = changed.par_iter().filter_map(|file| archive::row(file)).collect();
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
     let tx = store.transaction()?;
     for row in &rows {
         tx.archive(row)?;
@@ -654,6 +657,18 @@ mod tests {
         assert_eq!(indexed.store.lexical(&Filter::default(), "\"config.rs\"", 5).unwrap().len(), 1);
         let again = refresh(&mut indexed.store, &both).unwrap();
         assert_eq!((again.stored, again.parsed), (0, 0));
+    }
+
+    #[test]
+    fn a_moved_transcript_is_followed_while_another_process_writes() {
+        let mut indexed = Indexed::new();
+        let moved = move_to_q(&indexed.project);
+        let hold = Duration::from_millis(400);
+        let (locked_at, holder) = crate::test_support::store::hold_write_lock(&indexed.dir.path().join("index.sqlite"), hold);
+        refresh(&mut indexed.store, &[indexed.project.clone(), moved]).unwrap();
+        assert!(locked_at.elapsed() >= hold, "the refresh did not wait for the commit of the holder");
+        holder.join().unwrap();
+        assert_eq!(archived_paths(&indexed.store), ["-q/s1.jsonl", "-q/s1/subagents/agent-x.jsonl"]);
     }
 
     #[test]
