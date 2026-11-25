@@ -132,7 +132,12 @@ pub fn session_dirs<'a>(project_dir: &str, cwds: &'a [String]) -> impl Iterator<
 /// Whether a transcript in `project_dir`, whose entries name the working directories `cwds`, has moved there with
 /// `/cd`: its first directory does not give the name of `project_dir`.
 pub fn transcript_moved(project_dir: &str, cwds: &[String]) -> bool {
-    cwds.first().is_some_and(|first| encode(Path::new(first)) != project_dir)
+    cwds.first().is_some_and(|first| !names_project_dir(first, project_dir))
+}
+
+/// Whether the name of the directory `dir` gives `project_dir`, the project directory Claude Code keeps its sessions in.
+pub fn names_project_dir(dir: &str, project_dir: &str) -> bool {
+    encode(Path::new(dir)) == project_dir
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
