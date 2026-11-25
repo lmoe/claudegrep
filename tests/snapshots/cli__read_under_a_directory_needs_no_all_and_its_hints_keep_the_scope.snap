@@ -2,4 +2,4 @@
 source: tests/cli.rs
 expression: "fixture.run_in(&apple, &[\"--under\", \"../app\", \"read\", \"bbbb3333\"]).failure()"
 ---
-claudegrep: no session bbbb3333 in `[ROOT]/work/app` and below; see `claudegrep --under [ROOT]/work/app list`, or pass --all for other projects
+claudegrep: no session bbbb3333 in `[ROOT]/work/app` and below; see `claudegrep --under [ROOT]/work/app list`, or use --all instead of --under for other projects

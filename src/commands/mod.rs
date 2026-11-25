@@ -11,6 +11,7 @@ use anyhow::{Result, bail};
 
 use crate::app::{Needs, Setup};
 use crate::cli::Command;
+use crate::discover::Scope;
 use crate::render;
 use crate::store::{Filter, SessionRow, Store};
 
@@ -46,8 +47,9 @@ fn resolve_session(store: &Store, filter: &Filter, reference: &str) -> Result<Se
     match matches.as_slice() {
         [one] => Ok((*one).clone()),
         [] if !filter.scope.is_all() => {
+            let all = if matches!(filter.scope, Scope::Under { .. }) { "use --all instead of --under" } else { "pass --all" };
             bail!(
-                "no session {reference} in {}; see `{} list`, or pass --all for other projects",
+                "no session {reference} in {}; see `{} list`, or {all} for other projects",
                 render::scope_name(&filter.scope),
                 render::invocation(&filter.scope)
             )
@@ -115,7 +117,7 @@ mod tests {
         let under = Filter { scope: Scope::Under { root: "/q".into() }, ..Filter::default() };
         assert_eq!(
             resolve_session(&store, &under, "1234a").unwrap_err().to_string(),
-            "no session 1234a in `/q` and below; see `claudegrep --under /q list`, or pass --all for other projects"
+            "no session 1234a in `/q` and below; see `claudegrep --under /q list`, or use --all instead of --under for other projects"
         );
     }
 }
