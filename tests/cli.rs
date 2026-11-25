@@ -10,7 +10,7 @@ use insta::assert_snapshot;
 use serde_json::json;
 
 use support::fixture::Fixture;
-use support::lines::{Transcript, agent_meta, document, image, text, thinking, tool_error, tool_result, tool_use};
+use support::lines::{START, Transcript, agent_meta, document, image, text, thinking, tool_error, tool_result, tool_use};
 
 const TOKEN: &str = "aaaa1111-0000-4000-8000-000000000001";
 const NOTES: &str = "aaaa2222-0000-4000-8000-000000000002";
@@ -513,10 +513,7 @@ fn a_shell_cd_into_a_subdirectory_keeps_the_fallback_to_the_git_root() {
 fn app_and_a_neighbour() -> (Fixture, PathBuf) {
     let fixture = Fixture::new();
     for (name, id, title) in [("app", TOKEN, "Session in app"), ("app/sub", NOTES, "Session in sub"), ("apple", CI, "Session in apple")] {
-        let dir = fixture.dir(name);
-        let transcript =
-            Transcript::new(dir.to_str().unwrap()).user(&format!("Work in {name}")).assistant("m1", vec![text("Done.")]).ai_title(title);
-        fixture.session(&dir, id, &transcript);
+        fixture.titled_session(name, id, title, START);
     }
     let work = fixture.dir("app").parent().unwrap().to_path_buf();
     (fixture, work)

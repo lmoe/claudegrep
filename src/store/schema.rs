@@ -115,8 +115,9 @@ mod tests {
         tx.write_session(&key, Some(&session), &chunk::chunks(&session)).unwrap();
         tx.commit().unwrap();
         store.sync_text_index().unwrap();
-        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("hello there"), tokens: 1, data: &[1] }]).unwrap();
         store.use_embedder("model").unwrap();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("hello there"), tokens: 1, data: &[1] }]).unwrap();
+        assert_eq!(vector_rows(&store), 1);
         store.conn.execute("UPDATE meta SET value = 'older' WHERE key = 'schema'", []).unwrap();
         drop(store);
 
@@ -127,12 +128,57 @@ mod tests {
         assert!(store.parse_state().unwrap().is_empty(), "the next refresh parses the archive again");
         assert_eq!(store.passages("-p/s1.jsonl").unwrap(), []);
         assert_eq!(store.lexical(&Filter::default(), "\"hello\"", 10).unwrap(), []);
-        assert_eq!(store.stats(&Filter::default()).unwrap().embedded, 0);
+        assert_eq!(vector_rows(&store), 0);
         assert_eq!(store.embedder().unwrap(), None);
         assert_eq!(get_meta(&store.conn, "schema").unwrap().as_deref(), Some(SCHEMA_VERSION));
         drop(store);
 
         let store = Store::open(&path).unwrap();
         assert_eq!(store.archived_files().unwrap().len(), 1, "opening a current index changes nothing");
+    }
+
+    fn vector_rows(store: &Store) -> usize {
+        store.conn.query_row("SELECT count(*) FROM vectors", [], |row| row.get(0)).unwrap()
+    }
+
+    fn index_with_archive_and_vector(path: &std::path::Path) {
+        let mut store = Store::open(path).unwrap();
+        store.set_config_value("limit", Some("3")).unwrap();
+        let tx = store.transaction().unwrap();
+        tx.archive(&archive_row("-p/s1.jsonl", None, b"main")).unwrap();
+        tx.commit().unwrap();
+        store.use_embedder("model").unwrap();
+        store.insert_vectors(&[StoredVector { hash: ChunkHash::of("hello there"), tokens: 1, data: &[1] }]).unwrap();
+        assert_eq!(vector_rows(&store), 1);
+        assert_eq!(store.embedder().unwrap().as_deref(), Some("model"));
+    }
+
+    fn assert_rebuilt_without_vectors(path: &std::path::Path) {
+        let store = Store::open(path).unwrap();
+        assert_eq!(store.config_value("limit").unwrap().as_deref(), Some("3"));
+        assert_eq!(store.archived_files().unwrap().len(), 1);
+        assert_eq!(vector_rows(&store), 0);
+        assert_eq!(store.embedder().unwrap(), None);
+        assert_eq!(get_meta(&store.conn, "schema").unwrap().as_deref(), Some(SCHEMA_VERSION));
+    }
+
+    #[test]
+    fn an_index_without_a_meta_table_is_rebuilt_and_keeps_archive_and_config() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        index_with_archive_and_vector(&path);
+        Store::open(&path).unwrap().conn.execute_batch("DROP TABLE meta;").unwrap();
+
+        assert_rebuilt_without_vectors(&path);
+    }
+
+    #[test]
+    fn an_index_of_a_newer_schema_version_is_rebuilt_without_its_vectors() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("index.sqlite");
+        index_with_archive_and_vector(&path);
+        Store::open(&path).unwrap().conn.execute("UPDATE meta SET value = '7' WHERE key = 'schema'", []).unwrap();
+
+        assert_rebuilt_without_vectors(&path);
     }
 }

@@ -249,7 +249,9 @@ mod tests {
 
     use super::*;
     use crate::discover::Scope;
-    use crate::store::{Filter, SessionRow, StoredVector};
+    use crate::store::{ArchiveRow, Filter, SessionRow, StoredVector};
+    use crate::test_support::lines::{Transcript, text};
+    use crate::test_support::store::TempStore;
     use crate::transcript::Turn;
 
     fn line(kind: &str, ts: &str, extra: &str) -> String {
@@ -913,6 +915,35 @@ mod tests {
         let moves: Vec<_> =
             moved_transcripts(&sessions, &[], &stamps, moved_a).into_iter().map(|planned| (planned.from, planned.to)).collect();
         assert_eq!(moves, [("-b/s.jsonl", "-a/s.jsonl")], "of one size, the copy that moved stays");
+    }
+
+    #[test]
+    fn a_copy_whose_archive_cannot_be_decompressed_ranks_below_a_readable_copy_of_one_size() {
+        use std::io::Write;
+
+        let mut readable = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        readable.write_all(Transcript::new("/p").user("find the loader").assistant("a", vec![text("Done.")]).build().as_bytes()).unwrap();
+        let mut store = TempStore::new();
+        let tx = store.transaction().unwrap();
+        for (path, data) in [("-p/readable.jsonl", readable.finish().unwrap()), ("-p/broken.jsonl", b"not zlib".to_vec())] {
+            let stamp = discover::FileStamp { size: 9, mtime: 1 };
+            let row = ArchiveRow {
+                path: path.to_owned(),
+                parent: None,
+                project_dir: "-p".to_owned(),
+                session_id: "s".to_owned(),
+                meta: None,
+                stamp,
+                data,
+            };
+            tx.archive(&row).unwrap();
+        }
+        tx.commit().unwrap();
+
+        let broken = archived_copy_rank(&store, &key("-p/broken.jsonl"));
+        let readable = archived_copy_rank(&store, &key("-p/readable.jsonl"));
+        assert_eq!(broken, CopyRank::default());
+        assert!(broken < readable, "{broken:?} {readable:?}");
     }
 
     fn key(path: &str) -> ArchivedSessionKey {

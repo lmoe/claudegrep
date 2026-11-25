@@ -499,21 +499,54 @@ fn agent_description_comes_from_meta_or_the_prompt() {
     assert_eq!(agent_report(&later, None).unwrap().description, "The prompt");
 }
 
+fn titled_base() -> Transcript {
+    Transcript::new(CWD)
+        .user("<command-name>/model</command-name>")
+        .user_blocks(vec![image()])
+        .user("first prompt line\nmore")
+        .assistant("a", vec![text("Reply.")])
+}
+
+fn title_of(transcript: &Transcript) -> String {
+    parsed(transcript).meta.title
+}
+
 #[test]
 fn titles_prefer_custom_then_ai_then_the_first_prompt() {
-    let base = || {
-        Transcript::new(CWD)
-            .user("<command-name>/model</command-name>")
-            .user_blocks(vec![image()])
-            .user("first prompt line\nmore")
-            .assistant("a", vec![text("Reply.")])
-    };
-    let title = |transcript: Transcript| parsed(&transcript).meta.title;
+    let base = titled_base;
+    let title = |transcript: Transcript| title_of(&transcript);
     assert_eq!(title(base()), "first prompt line");
     assert_eq!(title(base().ai_title("First").ai_title("Second")), "Second");
     assert_eq!(title(base().custom_title("Custom").ai_title("Later AI")), "Custom");
     assert_eq!(title(base().custom_title("One").custom_title("Two")), "Two");
     assert_eq!(title(base().ai_title("Kept").raw(r#"{"type":"ai-title"}"#).raw(r#"{"type":"ai-title","aiTitle":null}"#)), "Kept");
+}
+
+#[test]
+fn a_custom_title_entry_without_a_title_keeps_the_earlier_one() {
+    let without = |line: &str| title_of(&titled_base().custom_title("Kept").raw(line));
+    assert_eq!(without(r#"{"type":"custom-title"}"#), "Kept");
+    assert_eq!(without(r#"{"type":"custom-title","customTitle":null}"#), "Kept");
+}
+
+#[test]
+fn an_assistant_entry_whose_content_is_a_string_does_not_stop_the_parser() {
+    let string = || json!({ "message": { "id": "a", "model": "m", "content": "a plain string" } });
+    let only = Transcript::new(CWD).user("question").entry("assistant", string());
+    let _ = parse("s1", &only.build());
+
+    let turns = turns(&Transcript::new(CWD).user("question").entry("assistant", string()).assistant("b", vec![text("A real block.")]));
+    let Some(Turn::Assistant(reply)) = turns.last() else { panic!("no assistant turn in {turns:?}") };
+    assert!(reply.blocks.iter().any(|block| matches!(block, Block::Text(t) if t == "A real block.")), "{:?}", reply.blocks);
+}
+
+#[test]
+fn an_agent_report_survives_an_assistant_entry_whose_content_is_not_a_list() {
+    let transcript = agent()
+        .user("Find the loader")
+        .entry("assistant", json!({ "message": { "id": "m1", "content": "a string, not blocks" } }))
+        .assistant("m2", vec![text(REPORT)]);
+    assert_eq!(agent_report(&transcript.build(), None).unwrap().text, REPORT);
 }
 
 #[test]
