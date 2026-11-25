@@ -12,7 +12,7 @@ Arguments:
 
 Options:
       --all
-          Use every project's sessions, not only those started in the current directory
+          Use every project's sessions, not only those of the current directory
 
       --since <WHEN>
           Only sessions active since WHEN: a date (2026-10-14) or an age (30m, 6h, 2d, 1w, 3mo)
