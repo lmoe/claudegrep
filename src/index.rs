@@ -553,6 +553,31 @@ mod tests {
     }
 
     #[test]
+    fn an_index_of_schema_5_with_a_project_directory_column_keeps_its_vectors_on_the_upgrade() {
+        let mut indexed = Indexed::new();
+        indexed.store.use_embedder("model").unwrap();
+        let hashes: Vec<_> = indexed.store.pending().unwrap().into_iter().map(|chunk| chunk.hash).collect();
+        let vectors: Vec<_> = hashes.iter().map(|&hash| StoredVector { hash, tokens: 1, data: &[1] }).collect();
+        indexed.store.insert_vectors(&vectors).unwrap();
+        // The sessions of schema 5 before the project directory left them.
+        indexed.execute(
+            "DROP TABLE chunks; DROP TABLE session_dirs; DROP TABLE sessions;
+             CREATE TABLE sessions (
+                 path TEXT PRIMARY KEY, project_dir TEXT NOT NULL, session_id TEXT NOT NULL, parsed INTEGER NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0, title TEXT, cwd TEXT, first_ts TEXT, last_ts TEXT,
+                 turns INTEGER NOT NULL DEFAULT 0
+             );
+             UPDATE meta SET value = '5' WHERE key = 'schema';",
+        );
+
+        indexed.store = Store::open(&indexed.dir.path().join("index.sqlite")).unwrap();
+        assert_eq!(indexed.refresh(), (0, 1));
+        assert_eq!(indexed.store.sessions(&in_directory("/p")).unwrap().len(), 1);
+        assert_eq!(indexed.store.embedder().unwrap().as_deref(), Some("model"));
+        assert_eq!(indexed.store.pending().unwrap(), [], "nothing is embedded again");
+    }
+
+    #[test]
     fn a_real_transcript_is_in_the_directory_it_started_in_and_not_where_its_shell_went() {
         let dir = tempfile::TempDir::new().unwrap();
         let project = dir.path().join("projects").join("-id-amet-Fugiat-adipiscing-ut");

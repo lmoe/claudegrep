@@ -3,11 +3,11 @@ use rusqlite::Connection;
 
 use super::{get_meta, set_meta};
 
-const SCHEMA_VERSION: &str = "5";
+const SCHEMA_VERSION: &str = "6";
 
-/// An older `SCHEMA_VERSION` whose vectors and embedder hold in this one. An upgrade from it parses the archive again but
-/// embeds nothing again. Any other version starts the vectors over.
-const SAME_VECTORS_SCHEMA_VERSION: &str = "4";
+/// Older `SCHEMA_VERSION`s whose vectors and embedder hold in this one. An upgrade from one of them parses the archive
+/// again but embeds nothing again. Any other version starts the vectors over.
+const SAME_VECTORS_SCHEMA_VERSIONS: &[&str] = &["4", "5"];
 
 /// The vectors and the meta, which names their embedder.
 const EMBEDDED: &str = "
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS archive_parent ON archive (parent);
 ";
 
 /// Creates what `conn` is missing. An index of another `SCHEMA_VERSION` is rebuilt, except the archive and the settings,
-/// and except the vectors of `SAME_VECTORS_SCHEMA_VERSION`.
+/// and except the vectors of `SAME_VECTORS_SCHEMA_VERSIONS`.
 pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
     let tx = conn.transaction()?;
     tx.execute_batch(PERSISTENT)?;
@@ -81,7 +81,7 @@ pub(super) fn ensure(conn: &mut Connection) -> Result<()> {
             "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS chunk_fts; DROP TABLE IF EXISTS session_dirs;
              DROP TABLE IF EXISTS sessions;",
         )?;
-        if version.as_deref() != Some(SAME_VECTORS_SCHEMA_VERSION) {
+        if !version.as_deref().is_some_and(|version| SAME_VECTORS_SCHEMA_VERSIONS.contains(&version)) {
             tx.execute_batch("DROP TABLE IF EXISTS vectors; DROP TABLE IF EXISTS meta;")?;
             tx.execute_batch(EMBEDDED)?;
         }
