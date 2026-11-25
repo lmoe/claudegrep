@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
 
 use crate::cli::Cli;
@@ -75,17 +75,22 @@ fn choose_scope(store: &Store, all: bool, under: Option<&Path>) -> Result<Scope>
     if all {
         return Ok(Scope::All);
     }
-    let cwd = std::env::current_dir()?;
     if let Some(dir) = under {
-        return Ok(Scope::under(dir, &cwd));
+        let dir = if dir.is_absolute() { dir.to_path_buf() } else { current_dir()?.join(dir) };
+        return Ok(Scope::under(&dir));
     }
-    let candidates = Scope::candidates(&cwd);
+    let candidates = Scope::candidates(&current_dir()?);
     for scope in &candidates {
         if store.count_sessions(&Filter { scope: scope.clone(), ..Filter::default() })? > 0 {
             return Ok(scope.clone());
         }
     }
     Ok(candidates.into_iter().next().expect("the cwd is always a candidate"))
+}
+
+fn current_dir() -> Result<PathBuf> {
+    std::env::current_dir()
+        .context("cannot read the current directory, which may have been deleted; --all and an absolute --under DIR work without it")
 }
 
 /// claudegrep indexes in the background of a Claude Code session, so it yields the CPU to everything else.

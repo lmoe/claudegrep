@@ -558,6 +558,27 @@ fn under_a_deleted_directory_behind_a_symbolic_link_finds_its_archived_sessions(
     assert!(listed.contains("Old project"), "{listed}");
 }
 
+#[cfg(unix)]
+#[test]
+fn a_deleted_current_directory_needs_an_absolute_under_or_all() {
+    let (fixture, work) = app_and_a_neighbour();
+    let app = work.join("app");
+    for args in [&["--under", app.to_str().unwrap(), "list"][..], &["--all", "list"]] {
+        let listed = fixture.run_in_deleted(&fixture.dir("gone"), args).success();
+        assert!(listed.contains("Session in app"), "{args:?}: {listed}");
+    }
+    for args in [&["list"][..], &["--under", "app", "list"]] {
+        let error = fixture.run_in_deleted(&fixture.dir("gone"), args).failure();
+        assert!(
+            error.starts_with(
+                "claudegrep: cannot read the current directory, which may have been deleted; --all and an absolute --under \
+                 DIR work without it: "
+            ),
+            "{args:?}: {error}"
+        );
+    }
+}
+
 #[test]
 fn under_and_all_together_are_rejected() {
     let (fixture, work) = app_and_a_neighbour();

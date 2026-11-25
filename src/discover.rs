@@ -157,9 +157,9 @@ impl Scope {
         std::iter::once(cwd).chain(git_root).map(|root| Self::Directory { root }).collect()
     }
 
-    /// The sessions in `dir` and below it. A relative `dir` starts at `cwd`.
-    pub fn under(dir: &Path, cwd: &Path) -> Self {
-        Self::Under { root: resolve(&cwd.join(dir)) }
+    /// The sessions in `dir`, which is absolute, and below it.
+    pub fn under(dir: &Path) -> Self {
+        Self::Under { root: resolve(dir) }
     }
 
     pub fn root(&self) -> Option<&Path> {
@@ -385,7 +385,7 @@ mod tests {
     }
 
     fn under(dir: &str, cwd: &Path) -> PathBuf {
-        Scope::under(Path::new(dir), cwd).root().unwrap().to_path_buf()
+        Scope::under(&cwd.join(dir)).root().unwrap().to_path_buf()
     }
 
     #[test]
