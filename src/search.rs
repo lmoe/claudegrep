@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn find_ranks_a_query_of_a_short_and_a_long_word_by_the_long_word() {
         let (store, encoder) = indexed();
-        // Only `cake` has three characters, so the text search looks for it alone.
+        // Only `cake` has at least three characters, so the text search looks for it alone.
         let groups = find(&store, &Filter::default(), &encoder, "a cake", window(1, 0, 0)).unwrap();
         assert_eq!(summary(&groups), [("cake".to_owned(), vec![(0, 0..1)])]);
     }

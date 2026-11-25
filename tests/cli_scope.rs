@@ -11,6 +11,7 @@ const APP_OLD: &str = "aaaa0001-0000-4000-8000-000000000001";
 const SUB_NEW: &str = "aaaa0002-0000-4000-8000-000000000002";
 const APPLE_OLD: &str = "bbbb0003-0000-4000-8000-000000000003";
 const APPLE_NEW: &str = "bbbb0004-0000-4000-8000-000000000004";
+const APP_MID: &str = "aaaa0005-0000-4000-8000-000000000005";
 
 /// Sessions in `app`, in `app/sub` and twice in `apple`, whose name starts with `app`, all below the returned directory.
 fn app_sub_and_apple() -> (Fixture, PathBuf) {
@@ -115,10 +116,12 @@ fn claude_config_dir_moves_the_default_projects_root() {
 #[test]
 fn a_window_whose_since_is_after_its_until_lists_nothing_and_does_not_fail() {
     let (fixture, work) = app_sub_and_apple();
+    fixture.titled_session("app", APP_MID, "App mid", "2026-01-03T10:00:00.000Z");
     let list = |window: &[&str]| fixture.run_in(&work, &[&["--all", "list"][..], window].concat()).success();
-    assert_eq!(titles(&list(&["--since", "2026-01-03"])), ["Apple new", "Sub new"]);
-    assert_eq!(titles(&list(&["--until", "2026-01-02"])), ["Apple old", "App old"]);
-    assert_eq!(titles(&list(&["--since", "2026-01-03", "--until", "2026-01-02"])), Vec::<&str>::new());
+    // Swapped, the bounds would keep the session of 2026-01-03.
+    assert_eq!(titles(&list(&["--since", "2026-01-05"])), ["Apple new", "Sub new"]);
+    assert_eq!(titles(&list(&["--until", "2026-01-01"])), ["Apple old", "App old"]);
+    assert_eq!(titles(&list(&["--since", "2026-01-05", "--until", "2026-01-01"])), Vec::<&str>::new());
 }
 
 #[test]

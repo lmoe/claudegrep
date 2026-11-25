@@ -544,8 +544,8 @@ fn an_assistant_entry_whose_content_is_a_string_does_not_stop_the_parser() {
 fn an_agent_report_survives_an_assistant_entry_whose_content_is_not_a_list() {
     let transcript = agent()
         .user("Find the loader")
-        .assistant("m1", vec![text(REPORT)])
-        .entry("assistant", json!({ "message": { "id": "m2", "content": "a string, not blocks" } }));
+        .entry("assistant", json!({ "message": { "id": "m1", "content": "a string, not blocks" } }))
+        .assistant("m2", vec![text(REPORT)]);
     assert_eq!(agent_report(&transcript.build(), None).unwrap().text, REPORT);
 }
 
