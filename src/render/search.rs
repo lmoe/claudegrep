@@ -5,7 +5,7 @@ use crate::render::clock::Clock;
 use crate::render::markdown::Quote;
 use crate::render::session::Meta;
 use crate::render::turn::role_label;
-use crate::render::{invocation, nothing_here, scope_name};
+use crate::render::{invocation, nothing_here, only_current, scope_name};
 use crate::search::{Hit, SessionHits};
 use crate::text::{plural, shorten};
 use crate::view::SearchView;
@@ -13,9 +13,6 @@ use crate::view::SearchView;
 pub const HEADING: &str = "# Search: ";
 
 const QUERY_CHARS: usize = 120;
-
-const ONLY_CURRENT: &str = "*(the only session started here is the current one, which search skips; \
-                            `claudegrep --all search` covers every project)*\n";
 
 pub fn search(view: &SearchView) -> String {
     view.to_string()
@@ -40,7 +37,7 @@ impl Display for SearchView {
         if total > 0 {
             write!(f, "{}", ReadingMore { command: &invocation(scope), limit: self.limit })
         } else if self.only_current {
-            write!(f, "\n{ONLY_CURRENT}")
+            write!(f, "\n{}", only_current(scope))
         } else {
             write!(f, "\n{}", nothing_here(scope, "search", self.moved_root.as_deref()))
         }

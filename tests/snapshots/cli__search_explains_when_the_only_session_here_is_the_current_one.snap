@@ -6,4 +6,4 @@ expression: run.success()
 
 *0 matches in 0 sessions, `[ROOT]/work/other`*
 
-*(the only session started here is the current one, which search skips; `claudegrep --all search` covers every project)*
+*(the only session in `[ROOT]/work/other` is the current one, which search skips; `claudegrep --all search` covers every project)*

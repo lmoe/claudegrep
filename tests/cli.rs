@@ -580,6 +580,14 @@ fn a_deleted_current_directory_needs_an_absolute_under_or_all() {
 }
 
 #[test]
+fn search_under_a_directory_names_it_when_the_only_session_there_is_the_current_one() {
+    let (fixture, work) = app_and_a_neighbour();
+    let run = fixture.run_with_model(&work, &["--under", "app/sub", "search", "work"], &[("CLAUDE_CODE_SESSION_ID", NOTES)]);
+    let found = run.success();
+    assert!(found.contains("*(the only session in `[ROOT]/work/app/sub` and below is the current one, which search skips;"), "{found}");
+}
+
+#[test]
 fn under_and_all_together_are_rejected() {
     let (fixture, work) = app_and_a_neighbour();
     for args in [&["--all", "--under", "app", "list"][..], &["--all", "list", "--under", "app"], &["--under", "app", "list", "--all"]] {

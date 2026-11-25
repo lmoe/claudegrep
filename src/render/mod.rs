@@ -149,12 +149,7 @@ const RESET_ROOT: &str = "`claudegrep config projects-root --unset` goes back to
 /// Names the projects root when the settings moved it (`moved_root`), because that explains an empty scope where
 /// Claude Code does have sessions.
 pub fn nothing_here(scope: &Scope, command: &str, moved_root: Option<&Path>) -> String {
-    let place = match scope {
-        Scope::All => None,
-        Scope::Directory { root } => Some(format!("in `{}`", root.display())),
-        Scope::Under { root } => Some(format!("in `{}` and below", root.display())),
-    };
-    match (place, moved_root) {
+    match (place(scope), moved_root) {
         (Some(place), None) => format!("*(no sessions {place}; `claudegrep --all {command}` covers every project)*\n"),
         (Some(place), Some(root)) => format!(
             "*(no sessions {place} under `{}`, the configured projects-root; `claudegrep --all {command}` covers every \
@@ -163,6 +158,25 @@ pub fn nothing_here(scope: &Scope, command: &str, moved_root: Option<&Path>) -> 
         ),
         (None, None) => "*(none)*\n".to_owned(),
         (None, Some(root)) => format!("*(none under `{}`, the configured projects-root; {RESET_ROOT})*\n", root.display()),
+    }
+}
+
+/// Says that nothing matched because the only session in `scope` is the current one, which search skips.
+pub fn only_current(scope: &Scope) -> String {
+    match place(scope) {
+        Some(place) => {
+            format!("*(the only session {place} is the current one, which search skips; `claudegrep --all search` covers every project)*\n")
+        }
+        None => "*(the only session is the current one, which search skips)*\n".to_owned(),
+    }
+}
+
+/// Where the sessions of `scope` are, to follow "sessions", or `None` for all projects.
+fn place(scope: &Scope) -> Option<String> {
+    match scope {
+        Scope::All => None,
+        Scope::Directory { root } => Some(format!("in `{}`", root.display())),
+        Scope::Under { root } => Some(format!("in `{}` and below", root.display())),
     }
 }
 
@@ -195,6 +209,16 @@ mod tests {
         assert_eq!(invocation(&Scope::All), "claudegrep --all");
         assert_eq!(nothing_here(&directory, "list", None), "*(no sessions in `/p/app`; `claudegrep --all list` covers every project)*\n");
         assert_eq!(nothing_here(&Scope::All, "search", None), "*(none)*\n");
+    }
+
+    #[test]
+    fn the_only_current_session_is_named_with_its_scope() {
+        assert_eq!(
+            only_current(&Scope::Directory { root: "/p".into() }),
+            "*(the only session in `/p` is the current one, which search skips; `claudegrep --all search` covers every \
+             project)*\n"
+        );
+        assert_eq!(only_current(&Scope::All), "*(the only session is the current one, which search skips)*\n");
     }
 
     #[test]
