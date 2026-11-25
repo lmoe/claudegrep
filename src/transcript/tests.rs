@@ -507,13 +507,14 @@ fn titled_base() -> Transcript {
         .assistant("a", vec![text("Reply.")])
 }
 
-fn title_of(transcript: Transcript) -> String {
-    parsed(&transcript).meta.title
+fn title_of(transcript: &Transcript) -> String {
+    parsed(transcript).meta.title
 }
 
 #[test]
 fn titles_prefer_custom_then_ai_then_the_first_prompt() {
-    let (base, title) = (titled_base, title_of);
+    let base = titled_base;
+    let title = |transcript: Transcript| title_of(&transcript);
     assert_eq!(title(base()), "first prompt line");
     assert_eq!(title(base().ai_title("First").ai_title("Second")), "Second");
     assert_eq!(title(base().custom_title("Custom").ai_title("Later AI")), "Custom");
@@ -523,7 +524,7 @@ fn titles_prefer_custom_then_ai_then_the_first_prompt() {
 
 #[test]
 fn a_custom_title_entry_without_a_title_keeps_the_earlier_one() {
-    let without = |line: &str| title_of(titled_base().custom_title("Kept").raw(line));
+    let without = |line: &str| title_of(&titled_base().custom_title("Kept").raw(line));
     assert_eq!(without(r#"{"type":"custom-title"}"#), "Kept");
     assert_eq!(without(r#"{"type":"custom-title","customTitle":null}"#), "Kept");
 }
