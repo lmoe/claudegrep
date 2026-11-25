@@ -122,11 +122,17 @@ fn stem(path: &Path) -> String {
 /// only the working directory of later entries, so its directory does not count. The whole path is stored and compared,
 /// because `encode` gives `/w/a.b`, `/w/a-b` and `/w/a/b` the same project directory.
 pub fn session_dirs<'a>(project_dir: &str, cwds: &'a [String]) -> impl Iterator<Item = &'a str> {
-    let moved = cwds.first().is_some_and(|first| encode(Path::new(first)) != project_dir);
+    let moved = transcript_moved(project_dir, cwds);
     cwds.iter()
         .enumerate()
         .filter(move |(index, cwd)| *index == 0 || (moved && encode(Path::new(cwd)) == project_dir))
         .map(|(_, cwd)| cwd.as_str())
+}
+
+/// Whether a transcript in `project_dir`, whose entries name the working directories `cwds`, has moved there with
+/// `/cd`: its first directory does not give the name of `project_dir`.
+pub fn transcript_moved(project_dir: &str, cwds: &[String]) -> bool {
+    cwds.first().is_some_and(|first| encode(Path::new(first)) != project_dir)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -43,7 +43,8 @@ fn follow_moved_transcripts(store: &mut Store, files: &[DiskFile]) -> Result<()>
     let sessions = store.archived_sessions()?;
     let stamps = store.archived_files()?;
     let mut moves = Vec::new();
-    for planned in moved_transcripts(&sessions, files, &stamps) {
+    let moved_copy = |session: &ArchivedSessionKey| archived_copy_moved(store, session);
+    for planned in moved_transcripts(&sessions, files, &stamps, moved_copy) {
         if starts_alike(store, &planned)? {
             moves.push(planned);
         }
@@ -70,9 +71,15 @@ struct Move<'a> {
 
 /// The archived sessions whose transcript is gone from its path, each with the path it moves to. When exactly one
 /// transcript on disk has the session's id, it moves there. When none has, as after Claude Code deleted a transcript that
-/// an older index holds at two paths, the largest archived copy stays and the others move to it. A transcript that Claude
-/// Code deleted and that has no other copy stays archived where it is.
-fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFile], stamps: &HashMap<String, FileStamp>) -> Vec<Move<'a>> {
+/// an older index holds at two paths, the largest archived copy stays and the others move to it. Of copies of one size,
+/// a copy that `/cd` moved (see `moved_copy`) stays, so the session stays in the directory `/cd` went to. A transcript
+/// that Claude Code deleted and that has no other copy stays archived where it is.
+fn moved_transcripts<'a>(
+    sessions: &'a [ArchivedSessionKey],
+    files: &'a [DiskFile],
+    stamps: &HashMap<String, FileStamp>,
+    moved_copy: impl Fn(&ArchivedSessionKey) -> bool,
+) -> Vec<Move<'a>> {
     let mut on_disk_by_id: HashMap<&str, Vec<&DiskFile>> = HashMap::new();
     for file in files.iter().filter(|file| file.parent.is_none()) {
         on_disk_by_id.entry(file.session_id.as_str()).or_default().push(file);
@@ -93,7 +100,7 @@ fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFil
             })),
             None => {
                 let size = |session: &ArchivedSessionKey| stamps.get(&session.path).map_or(0, |stamp| stamp.size);
-                let Some(kept) = gone.iter().max_by_key(|session| (size(session), &session.path)) else {
+                let Some(kept) = gone.iter().max_by_key(|session| (size(session), moved_copy(session), &session.path)) else {
                     continue;
                 };
                 moves.extend(gone.iter().filter(|session| session.path != kept.path).map(|session| Move {
@@ -107,6 +114,15 @@ fn moved_transcripts<'a>(sessions: &'a [ArchivedSessionKey], files: &'a [DiskFil
         }
     }
     moves
+}
+
+/// Whether the transcript archived at `session.path` has moved to its project directory with `/cd`.
+fn archived_copy_moved(store: &Store, session: &ArchivedSessionKey) -> bool {
+    let Ok(archived) = store.load_archive(&session.path) else {
+        return false;
+    };
+    let parsed = archive::decompress(&archived.main).and_then(|text| transcript::parse(&session.session_id, &text));
+    parsed.is_some_and(|parsed| discover::transcript_moved(&session.project_dir, &parsed.cwds))
 }
 
 /// Whether the transcript archived at `planned.from` starts with the same entry as the one at `planned.to`, as two
@@ -691,6 +707,40 @@ mod tests {
         assert_eq!(archived_paths(&indexed.store), ["-q/s1.jsonl", "-q/s1/subagents/agent-x.jsonl"]);
     }
 
+    /// A transcript that started in `/z` and moved with `/cd` to `/m`, which sorts before `/z`.
+    fn started_in_z_and_moved_to_m() -> String {
+        let entry =
+            |kind: &str, ts: &str, cwd: &str, extra: &str| format!(r#"{{"type":"{kind}","timestamp":"{ts}","cwd":"{cwd}",{extra}}}"#);
+        [
+            entry("user", "2026-01-01T10:00:00Z", "/z", r#""message":{"role":"user","content":"start in z"}"#),
+            entry("assistant", "2026-01-01T10:00:01Z", "/z", r#""message":{"id":"a","content":[{"type":"text","text":"Started."}]}"#),
+            entry("user", "2026-01-01T10:01:00Z", "/m", r#""message":{"role":"user","content":"go on in m"}"#),
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn of_two_archived_copies_of_one_size_the_moved_one_stays() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (start, moved) = (dir.path().join("projects").join("-z"), dir.path().join("projects").join("-m"));
+        let transcript = started_in_z_and_moved_to_m();
+        for project in [&start, &moved] {
+            fs::create_dir_all(project).unwrap();
+            fs::write(project.join("s1.jsonl"), &transcript).unwrap();
+        }
+        let mut store = Store::open(&dir.path().join("index.sqlite")).unwrap();
+        let both = [start.clone(), moved.clone()];
+        refresh(&mut store, &both).unwrap();
+        assert_eq!(store.sessions(&Filter::default()).unwrap().len(), 2, "both copies are on disk");
+
+        fs::remove_file(start.join("s1.jsonl")).unwrap();
+        fs::remove_file(moved.join("s1.jsonl")).unwrap();
+        refresh(&mut store, &both).unwrap();
+        assert_eq!(only_session(&store).path, "-m/s1.jsonl");
+        assert_eq!(store.sessions(&in_directory("/m")).unwrap().len(), 1, "the session is where /cd took it");
+        assert_eq!(store.sessions(&in_directory("/z")).unwrap().len(), 1, "and where it started");
+    }
+
     #[test]
     fn a_transcript_with_the_same_id_that_starts_differently_is_no_move() {
         let mut indexed = Indexed::new();
@@ -721,7 +771,10 @@ mod tests {
         let sessions: Vec<_> = archived.iter().map(|(path, _)| key(path)).collect();
         let stamps = archived.iter().map(|(path, size)| ((*path).to_owned(), discover::FileStamp { size: *size, mtime: 1 })).collect();
         let files: Vec<_> = on_disk.iter().map(|path| disk_file(path, "s")).collect();
-        moved_transcripts(&sessions, &files, &stamps).into_iter().map(|planned| (planned.from.to_owned(), planned.to.to_owned())).collect()
+        moved_transcripts(&sessions, &files, &stamps, |_| false)
+            .into_iter()
+            .map(|planned| (planned.from.to_owned(), planned.to.to_owned()))
+            .collect()
     }
 
     fn moves(archived: &[&str], on_disk: &[&str]) -> Vec<(String, String)> {
@@ -736,7 +789,7 @@ mod tests {
         assert_eq!(moves(&["-a/s.jsonl"], &[]), [], "Claude Code deleted it");
         assert_eq!(moves(&["-a/s.jsonl"], &["-b/s.jsonl", "-c/s.jsonl"]), [], "two files have its id");
         let other = disk_file("-b/t.jsonl", "t");
-        assert!(moved_transcripts(&[key("-a/s.jsonl")], std::slice::from_ref(&other), &HashMap::new()).is_empty(), "another id");
+        assert!(moved_transcripts(&[key("-a/s.jsonl")], std::slice::from_ref(&other), &HashMap::new(), |_| false).is_empty(), "another id");
     }
 
     #[test]
@@ -748,6 +801,12 @@ mod tests {
             [to_b("-a/s.jsonl"), to_b("-c/s.jsonl")]
         );
         assert_eq!(moves_by_size(&[("-a/s.jsonl", 9), ("-b/s.jsonl", 9)], &[]), [to_b("-a/s.jsonl")], "the same size picks one path");
+        let sessions = [key("-a/s.jsonl"), key("-b/s.jsonl")];
+        let stamps = sessions.iter().map(|session| (session.path.clone(), discover::FileStamp { size: 9, mtime: 1 })).collect();
+        let moved_a = |session: &ArchivedSessionKey| session.path == "-a/s.jsonl";
+        let moves: Vec<_> =
+            moved_transcripts(&sessions, &[], &stamps, moved_a).into_iter().map(|planned| (planned.from, planned.to)).collect();
+        assert_eq!(moves, [("-b/s.jsonl", "-a/s.jsonl")], "of one size, the copy that moved stays");
     }
 
     fn key(path: &str) -> ArchivedSessionKey {
