@@ -767,6 +767,24 @@ mod tests {
     }
 
     #[test]
+    fn archived_copies_with_one_id_that_start_differently_stay_two_sessions() {
+        let mut indexed = Indexed::new();
+        let other = indexed.project.with_file_name("-q");
+        fs::create_dir_all(&other).unwrap();
+        let start = line("user", "2026-02-01T09:00:00Z", r#""message":{"role":"user","content":"another start"}"#);
+        fs::write(other.join("s1.jsonl"), start).unwrap();
+        let both = [indexed.project.clone(), other.clone()];
+        refresh(&mut indexed.store, &both).unwrap();
+
+        fs::remove_file(indexed.main_transcript()).unwrap();
+        fs::remove_file(other.join("s1.jsonl")).unwrap();
+        refresh(&mut indexed.store, &both).unwrap();
+        let mut paths: Vec<_> = indexed.store.sessions(&Filter::default()).unwrap().into_iter().map(|session| session.path).collect();
+        paths.sort();
+        assert_eq!(paths, ["-p/s1.jsonl", "-q/s1.jsonl"]);
+    }
+
+    #[test]
     fn a_transcript_with_the_same_id_that_starts_differently_is_no_move() {
         let mut indexed = Indexed::new();
         let other = indexed.project.with_file_name("-q");
