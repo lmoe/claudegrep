@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -53,19 +53,33 @@ impl DerefMut for TempStore {
 }
 
 /// Holds the write lock of the index at `path` for `hold` in another connection, and returns once it has the lock. The
-/// connection leaves the schema alone, so it also holds the lock of an index of another version. Join the handle to wait
-/// for the commit.
-pub fn hold_write_lock(path: &Path, hold: Duration) -> JoinHandle<()> {
+/// index must exist. Returns the time of the lock and the handle: join it to wait for the commit.
+pub fn hold_write_lock(path: &Path, hold: Duration) -> (Instant, JoinHandle<()>) {
+    let shown = path.display().to_string();
     let path = path.to_owned();
     let (locked, wait_for_lock) = mpsc::channel();
     let holder = thread::spawn(move || {
-        let conn = Connection::open(&path).expect("the holder opens the index");
-        conn.execute_batch("BEGIN IMMEDIATE").expect("the holder takes the lock");
-        conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES ('held', 'yes')", []).expect("the holder writes");
-        locked.send(()).expect("the test waits for the lock");
+        let take_lock = || -> rusqlite::Result<Connection> {
+            let conn = Connection::open(&path)?;
+            conn.execute_batch("BEGIN IMMEDIATE")?;
+            conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES ('held', 'yes')", [])?;
+            Ok(conn)
+        };
+        let taken = take_lock().map(|conn| (conn, Instant::now()));
+        let conn = match taken {
+            Ok((conn, at)) => {
+                locked.send(Ok(at)).expect("the test waits for the lock");
+                conn
+            }
+            Err(error) => {
+                locked.send(Err(error)).expect("the test waits for the lock");
+                return;
+            }
+        };
         thread::sleep(hold);
         conn.execute_batch("COMMIT").expect("the holder commits");
     });
-    wait_for_lock.recv().expect("the holder takes the lock");
-    holder
+    let taken =
+        wait_for_lock.recv().expect("the holder reports").unwrap_or_else(|error| panic!("cannot hold the write lock of {shown}: {error}"));
+    (taken, holder)
 }
