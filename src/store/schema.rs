@@ -23,7 +23,6 @@ CREATE TABLE vectors (
 const PARSED: &str = "
 CREATE TABLE sessions (
     path TEXT PRIMARY KEY,
-    project_dir TEXT NOT NULL,
     session_id TEXT NOT NULL,
     parsed INTEGER NOT NULL,
     archived INTEGER NOT NULL DEFAULT 0,
@@ -33,7 +32,6 @@ CREATE TABLE sessions (
     last_ts TEXT,
     turns INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX sessions_project ON sessions (project_dir);
 CREATE INDEX sessions_id ON sessions (session_id);
 CREATE TABLE session_dirs (
     path TEXT NOT NULL REFERENCES sessions (path) ON DELETE CASCADE,

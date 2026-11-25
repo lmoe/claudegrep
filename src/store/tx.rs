@@ -17,6 +17,7 @@ pub struct ArchiveRow {
 
 pub struct SessionKey<'a> {
     pub path: &'a str,
+    /// The project directory that holds the transcript, see `discover::session_dirs`.
     pub project_dir: &'a str,
     pub session_id: &'a str,
     pub archived: bool,
@@ -71,11 +72,10 @@ impl StoreTx<'_> {
     pub fn write_session(&self, key: &SessionKey<'_>, session: Option<&Session>, chunks: &[Chunk]) -> Result<()> {
         self.0.execute("DELETE FROM sessions WHERE path = ?1", [key.path])?;
         self.0.execute(
-            "INSERT INTO sessions (path, project_dir, session_id, parsed, archived, title, cwd, first_ts, last_ts, turns)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO sessions (path, session_id, parsed, archived, title, cwd, first_ts, last_ts, turns)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 key.path,
-                key.project_dir,
                 key.session_id,
                 chunk::VERSION,
                 key.archived,
